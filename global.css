@@ -1,0 +1,93 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * Jetons de couleur Material-3-like, exprimés en "R G B" (sans virgules)
+ * pour être utilisables avec la syntaxe Tailwind rgb(var(--x) / <alpha-value>).
+ * :root = thème clair, .dark = thème sombre. NativeWind bascule
+ * automatiquement entre les deux selon `colorScheme` (voir src/theme/colorScheme.ts).
+ */
+:root {
+  --color-surface: 250 248 255;
+  --color-surface-dim: 217 217 229;
+  --color-surface-bright: 250 248 255;
+  --color-surface-container-lowest: 255 255 255;
+  --color-surface-container-low: 243 243 254;
+  --color-surface-container: 237 237 249;
+  --color-surface-container-high: 231 231 243;
+  --color-surface-container-highest: 225 226 237;
+  --color-surface-variant: 225 226 237;
+  --color-on-surface: 25 27 35;
+  --color-on-surface-variant: 67 70 85;
+  --color-inverse-surface: 46 48 57;
+  --color-inverse-on-surface: 240 240 251;
+  --color-outline: 115 118 134;
+  --color-outline-variant: 195 198 215;
+
+  --color-primary: 0 74 198;
+  --color-on-primary: 255 255 255;
+  --color-primary-container: 37 99 235;
+  --color-on-primary-container: 238 239 255;
+  --color-inverse-primary: 180 197 255;
+
+  --color-secondary: 0 110 45;
+  --color-on-secondary: 255 255 255;
+  --color-secondary-container: 124 249 148;
+  --color-on-secondary-container: 0 114 48;
+
+  --color-tertiary: 148 55 0;
+  --color-on-tertiary: 255 255 255;
+  --color-tertiary-container: 188 72 0;
+  --color-on-tertiary-container: 255 237 230;
+
+  --color-error: 186 26 26;
+  --color-on-error: 255 255 255;
+  --color-error-container: 255 218 214;
+  --color-on-error-container: 147 0 10;
+
+  --color-background: 250 248 255;
+  --color-on-background: 25 27 35;
+}
+
+.dark {
+  --color-surface: 19 19 22;
+  --color-surface-dim: 19 19 22;
+  --color-surface-bright: 48 47 55;
+  --color-surface-container-lowest: 13 13 16;
+  --color-surface-container-low: 27 27 31;
+  --color-surface-container: 31 31 35;
+  --color-surface-container-high: 41 42 46;
+  --color-surface-container-highest: 52 52 57;
+  --color-surface-variant: 69 70 79;
+  --color-on-surface: 227 226 230;
+  --color-on-surface-variant: 198 197 208;
+  --color-inverse-surface: 227 226 230;
+  --color-inverse-on-surface: 46 48 57;
+  --color-outline: 143 144 154;
+  --color-outline-variant: 69 70 79;
+
+  --color-primary: 180 197 255;
+  --color-on-primary: 0 23 75;
+  --color-primary-container: 31 79 170;
+  --color-on-primary-container: 219 225 255;
+  --color-inverse-primary: 0 74 198;
+
+  --color-secondary: 98 223 125;
+  --color-on-secondary: 0 57 22;
+  --color-secondary-container: 0 83 33;
+  --color-on-secondary-container: 127 252 151;
+
+  --color-tertiary: 255 181 150;
+  --color-on-tertiary: 92 25 0;
+  --color-tertiary-container: 125 45 0;
+  --color-on-tertiary-container: 255 219 205;
+
+  --color-error: 255 180 171;
+  --color-on-error: 105 0 5;
+  --color-error-container: 147 0 10;
+  --color-on-error-container: 255 218 214;
+
+  --color-background: 19 19 22;
+  --color-on-background: 227 226 230;
+}
