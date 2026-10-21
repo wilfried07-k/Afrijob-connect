@@ -1,6 +1,8 @@
+import type { NavigatorScreenParams } from '@react-navigation/native';
+
 /**
- * Types de navigation centralisés.
- * Ajoute ici chaque nouvel écran au fur et à mesure de la conversion des maquettes.
+ * Types de navigation centralisÃ©s.
+ * Ajoute ici chaque nouvel Ã©cran au fur et Ã  mesure de la conversion des maquettes.
  */
 
 export type OnboardingStackParamList = {
@@ -28,13 +30,13 @@ export type CandidateTabParamList = {
 
 
 export type CandidateStackParamList = {
-  CandidateTabs: undefined;
-  DetailOffre: { jobId?: string; title?: string; company?: string } | undefined;
-  CandidatureRapide: { jobId?: string; title?: string; company?: string } | undefined;
+  CandidateTabs: NavigatorScreenParams<CandidateTabParamList> | undefined;
+  DetailOffre: { jobId?: number; title?: string; company?: string } | undefined;
+  CandidatureRapide: { jobId?: number; title?: string; company?: string } | undefined;
   CandidatureEnvoyee: { company?: string } | undefined;
   SuiviCandidatures: undefined;
   CreationProfilCandidat: undefined;
-  ProfilPublicCandidat: undefined;
+  ProfilPublicCandidat: { candidateId?: number } | undefined;
   CandidatureSpontanee: { company?: string } | undefined;
   ConfirmationEntretien: { company?: string; position?: string } | undefined;
   CalendrierCandidat: undefined;
@@ -45,24 +47,24 @@ export type CandidateStackParamList = {
   ParametresNotifications: undefined;
   Notifications: undefined;
   GestionAlertesEmploi: undefined;
-  CreerAlerteEmploi: { alertId?: string; title?: string } | undefined;
+  CreerAlerteEmploi: { alertId?: number; title?: string } | undefined;
+  DetailsAlerteEmploi: { alertId?: number; title?: string; location?: string } | undefined;
   ComparaisonSalaires: undefined;
   CoachingCarriereIA: undefined;
   ConseilsCarriere: undefined;
   TestDeCompetences: undefined;
   PortfolioProjets: undefined;
   ReseauProfessionnel: undefined;
-  AvisCultureEntreprise: { company?: string } | undefined;
+  AvisCultureEntreprise: { company?: string; companyId?: number } | undefined;
   Parrainage: undefined;
-  DiscussionCandidat: { company?: string } | undefined;
-  DetailsCandidature: { title?: string; company?: string } | undefined;
+  DiscussionCandidat: { conversationId?: number; company?: string } | undefined;
+  DetailsCandidature: { applicationId?: number; title?: string; company?: string } | undefined;
   MentionsLegales: undefined;
   CentreAssistance: undefined;
   SupportPrioritaire: undefined;
   PageErreur: { type?: 'maintenance' | 'error' | 'offline' } | undefined;
-  DetailsAlerteEmploi: { title?: string; location?: string } | undefined;
   MonCVDocuments: undefined;
-  ResultatsCertification: { testName?: string; score?: number } | undefined;
+  ResultatsCertification: { assessmentId: number } | undefined;
   RedactionAssisteeIA: undefined;
   CentrePreferences: undefined;
   MesRecompensesParrainage: undefined;
@@ -78,17 +80,17 @@ export type RecruiterTabParamList = {
 };
 
 export type RecruiterStackParamList = {
-  RecruiterTabs: undefined;
+  RecruiterTabs: NavigatorScreenParams<RecruiterTabParamList> | undefined;
   PublierOffre: undefined;
-  DetailsCandidat: { name?: string; role?: string; matchScore?: number } | undefined;
-  PlanifierEntretien: { candidateName?: string; role?: string } | undefined;
+  DetailsCandidat: { applicationId?: number; candidateId?: number; name?: string; role?: string; matchScore?: number } | undefined;
+  PlanifierEntretien: { applicationId?: number; candidateName?: string; role?: string } | undefined;
   ComparaisonCandidats: undefined;
   VerificationKycEntreprise: undefined;
   GestionEntretiensVideo: undefined;
   VideoconferenceEntretien: { name?: string; role?: string; asRecruiter?: boolean } | undefined;
-  NotesEntretien: { candidateName?: string; role?: string } | undefined;
-  RedactionRapportEntretien: { candidateName?: string; role?: string } | undefined;
-  ValidationRapportRH: { candidateName?: string; role?: string } | undefined;
+  NotesEntretien: { interviewId?: number; candidateName?: string; role?: string } | undefined;
+  RedactionRapportEntretien: { interviewId?: number; candidateName?: string; role?: string } | undefined;
+  ValidationRapportRH: { interviewId?: number; candidateName?: string; role?: string } | undefined;
   ParametresCompte: undefined;
   ParametresNotifications: undefined;
   FacturationAbonnement: undefined;
@@ -104,8 +106,8 @@ export type RecruiterStackParamList = {
   SupportPrioritaire: undefined;
   PageErreur: { type?: 'maintenance' | 'error' | 'offline' } | undefined;
   SelectionModePaiement: undefined;
-  ValidationPaiementUSSD: undefined;
-  PaiementReussi: undefined;
+  ValidationPaiementUSSD: { paymentId: number; method: string; amount: number };
+  PaiementReussi: { paymentId: number };
   AnalytiqueOffre: { title?: string } | undefined;
   DocumentsConformiteEntreprise: undefined;
   ProfilDirigeantEntreprise: undefined;
@@ -118,7 +120,7 @@ export type RecruiterStackParamList = {
   ApprobationFactures: undefined;
   BibliothequeModeles: undefined;
   ExportationRapport: undefined;
-  DeclarationEmbauche: { candidateName?: string; role?: string } | undefined;
+  DeclarationEmbauche: { candidateId?: number; candidateName?: string; role?: string } | undefined;
   PaiementCotisationsCNPS: undefined;
   AttestationCNPS: undefined;
 };
@@ -142,9 +144,9 @@ export type AdminStackParamList = {
   GestionAccesRH: undefined;
   RapportSecuriteMensuel: undefined;
   GestionCampagnesSMSEmail: undefined;
-  CiblageCampagnePush: { campaignName?: string } | undefined;
-  ConfirmationEnvoiCampagne: { campaignName?: string } | undefined;
-  SuiviPerformancesCampagne: { campaignName?: string } | undefined;
+  CiblageCampagnePush: { campaignId?: number; campaignName?: string } | undefined;
+  ConfirmationEnvoiCampagne: { campaignId: number; campaignName: string } | undefined;
+  SuiviPerformancesCampagne: { campaignId: number; campaignName: string } | undefined;
   GestionEquipesAgents: undefined;
   TableauDeBordSupervision: undefined;
   KYCAgentTerrain: undefined;

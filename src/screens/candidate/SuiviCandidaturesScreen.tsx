@@ -1,8 +1,10 @@
-import { useState } from 'react';
+﻿import { useEffect, useState } from 'react';
 import { View, Text, Pressable, FlatList } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { CandidateStackParamList } from '../../navigation/types';
+import { useAuth } from '../../lib/auth';
+import { listCandidateApplications, type ApplicationDetail } from '../../lib/api';
 import Screen from '../../components/ui/Screen';
 import { colors } from '../../theme';
 
@@ -10,55 +12,13 @@ type Props = NativeStackScreenProps<CandidateStackParamList, 'SuiviCandidatures'
 
 type Status = 'interview' | 'review' | 'rejected' | 'accepted';
 
-type Application = {
-  id: string;
-  title: string;
-  company: string;
-  location: string;
-  status: Status;
-  statusLabel: string;
-  detail: string;
-  timeAgo: string;
-};
-
-const APPLICATIONS: Application[] = [
-  {
-    id: '1',
-    title: 'Senior Product Designer',
-    company: 'MTN Cameroon',
-    location: 'Douala',
-    status: 'interview',
-    statusLabel: 'Entretien prévu',
-    detail: 'Entretien le 15 Octobre, 14:00',
-    timeAgo: 'Il y a 2 jours',
-  },
-  {
-    id: '2',
-    title: 'Analyste Financier',
-    company: 'Afriland First Bank',
-    location: 'Yaoundé',
-    status: 'review',
-    statusLabel: 'En examen',
-    detail: 'Candidature en cours de traitement',
-    timeAgo: 'Il y a 4 jours',
-  },
-  {
-    id: '3',
-    title: 'Développeur Mobile',
-    company: 'Camtel',
-    location: 'Douala',
-    status: 'rejected',
-    statusLabel: 'Non retenue',
-    detail: "L'entreprise a pourvu le poste",
-    timeAgo: 'Il y a 1 semaine',
-  },
-];
 
 const FILTERS: { label: string; value: 'Toutes' | Status }[] = [
   { label: 'Toutes', value: 'Toutes' },
-  { label: 'En cours', value: 'review' },
+  { label: 'En examen', value: 'review' },
   { label: 'Entretien', value: 'interview' },
-  { label: 'Terminées', value: 'rejected' },
+  { label: 'RefusÃ©es', value: 'rejected' },
+  { label: 'AcceptÃ©es', value: 'accepted' },
 ];
 
 const STATUS_STYLE: Record<Status, { bg: string; text: string; icon: keyof typeof MaterialIcons.glyphMap }> = {
@@ -69,8 +29,51 @@ const STATUS_STYLE: Record<Status, { bg: string; text: string; icon: keyof typeo
 };
 
 export default function SuiviCandidaturesScreen({ navigation }: Props) {
+  const { authState } = useAuth();
   const [filter, setFilter] = useState<'Toutes' | Status>('Toutes');
-  const applications = filter === 'Toutes' ? APPLICATIONS : APPLICATIONS.filter((a) => a.status === filter);
+  const [applications, setApplications] = useState<ApplicationDetail[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const normalizeStatus = (status: string): Status => {
+    if (status === 'Entretien') return 'interview';
+    if (status === 'En examen') return 'review';
+    if (status === 'RefusÃ©e') return 'rejected';
+    if (status === 'AcceptÃ©e') return 'accepted';
+    return 'review';
+  };
+
+  const filteredApplications = applications.filter((application) => {
+    if (filter === 'Toutes') return true;
+    return normalizeStatus(application.status) === filter;
+  });
+
+  const totals = {
+    total: applications.length,
+    review: applications.filter((application) => normalizeStatus(application.status) === 'review').length,
+    interview: applications.filter((application) => normalizeStatus(application.status) === 'interview').length,
+    rejected: applications.filter((application) => normalizeStatus(application.status) === 'rejected').length,
+    accepted: applications.filter((application) => normalizeStatus(application.status) === 'accepted').length,
+  };
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const candidateId = authState.profile?.candidate_profile_id;
+        if (candidateId) {
+          const res = await listCandidateApplications(candidateId);
+          setApplications(res);
+        } else {
+          setApplications([]);
+        }
+      } catch (err) {
+        console.error('Erreur chargement candidatures', err);
+        setApplications([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+    load();
+  }, [authState.profile]);
 
   return (
     <Screen>
@@ -82,18 +85,19 @@ export default function SuiviCandidaturesScreen({ navigation }: Props) {
       </View>
 
       <FlatList
-        data={applications}
-        keyExtractor={(item) => item.id}
+        data={filteredApplications}
+        keyExtractor={(item) => String(item.id)}
         contentContainerStyle={{ padding: 20, gap: 12 }}
         ListHeaderComponent={
           <View className="mb-md gap-lg">
             {/* Stats */}
             <View className="flex-row flex-wrap gap-2">
               {[
-                { label: 'Total', value: '24', color: colors.primary },
-                { label: 'En cours', value: '12', color: colors.primary },
-                { label: 'Entretiens', value: '03', color: colors.secondary },
-                { label: 'Refusées', value: '09', color: colors.error },
+                { label: 'Total', value: String(totals.total), color: colors.primary },
+                { label: 'En cours', value: String(totals.review), color: colors.primary },
+                { label: 'Entretiens', value: String(totals.interview), color: colors.secondary },
+                { label: 'RefusÃ©es', value: String(totals.rejected), color: colors.error },
+                { label: 'AcceptÃ©es', value: String(totals.accepted), color: colors.secondary },
               ].map((stat) => (
                 <View key={stat.label} className="w-[47%] gap-1 rounded-lg border border-outline-variant/30 bg-surface-container-lowest p-md shadow-sm">
                   <Text className="font-sans text-label-md text-on-surface-variant">{stat.label}</Text>
@@ -124,14 +128,27 @@ export default function SuiviCandidaturesScreen({ navigation }: Props) {
           </View>
         }
         renderItem={({ item }) => {
-          const style = STATUS_STYLE[item.status];
+          const statusKey = normalizeStatus(item.status);
+          const style = STATUS_STYLE[statusKey];
+          const detail =
+            item.status === 'Entretien'
+              ? 'Entretien planifiÃ©'
+              : item.status === 'En examen'
+              ? 'Candidature en cours de traitement'
+              : item.status === 'RefusÃ©e'
+              ? "Offre non retenue"
+              : item.status === 'AcceptÃ©e'
+              ? 'Offre acceptÃ©e'
+              : 'Candidature envoyÃ©e';
+          const timeAgo = item.created_at ? new Date(item.created_at).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' }) : '';
+
           return (
             <Pressable
               onPress={() => {
-                if (item.status === 'interview') {
-                  navigation.navigate('ConfirmationEntretien', { company: item.company, position: item.title });
+                if (statusKey === 'interview') {
+                  navigation.navigate('ConfirmationEntretien', { company: item.company_name, position: item.job_title });
                 } else {
-                  navigation.navigate('DetailsCandidature', { title: item.title, company: item.company });
+                  navigation.navigate('DetailsCandidature', { applicationId: item.id, title: item.job_title, company: item.company_name });
                 }
               }}
               className="rounded-lg border border-outline-variant bg-white p-md shadow-sm"
@@ -142,24 +159,24 @@ export default function SuiviCandidaturesScreen({ navigation }: Props) {
                     <MaterialIcons name="business" size={20} color={colors.onSurfaceVariant} />
                   </View>
                   <View className="flex-1">
-                    <Text className="font-sans-semibold text-title-lg text-on-surface">{item.title}</Text>
+                    <Text className="font-sans-semibold text-title-lg text-on-surface">{item.job_title}</Text>
                     <Text className="font-sans text-body-md text-on-surface-variant">
-                      {item.company} • {item.location}
+                      {item.company_name}
                     </Text>
                   </View>
                 </View>
                 <View className={`rounded-full px-3 py-1 ${style.bg}`}>
-                  <Text className={`font-sans-semibold text-label-md ${style.text}`}>{item.statusLabel}</Text>
+                  <Text className={`font-sans-semibold text-label-md ${style.text}`}>{item.status}</Text>
                 </View>
               </View>
               <View className="flex-row items-center justify-between border-t border-outline-variant/30 pt-sm">
                 <View className="flex-row items-center gap-1">
                   <MaterialIcons name={style.icon} size={18} color={style.text.includes('error') ? colors.error : colors.secondary} />
                   <Text className="font-sans-semibold text-label-lg" style={{ color: colors.onSurfaceVariant }}>
-                    {item.detail}
+                    {detail}
                   </Text>
                 </View>
-                <Text className="font-sans text-label-md text-on-surface-variant">{item.timeAgo}</Text>
+                <Text className="font-sans text-label-md text-on-surface-variant">{timeAgo}</Text>
               </View>
             </Pressable>
           );

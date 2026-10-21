@@ -9,20 +9,20 @@ const PLANS = [
     name: 'Essentiel',
     price: '0',
     period: 'Gratuit',
-    features: ['2 offres actives', 'Accès base candidats', 'Support email'],
+    features: ['2 offres actives', 'Demandes au centre d’assistance'],
   },
   {
     name: 'Premium',
     price: '45 000',
     period: '/ mois',
     highlighted: true,
-    features: ['Offres illimitées', 'Recommandations IA', 'Sponsoring inclus (2/mois)', 'Support prioritaire'],
+    features: ['Offres actives illimitées', 'Plan actif 30 jours après vérification du paiement'],
   },
   {
     name: 'Entreprise',
     price: 'Sur devis',
     period: '',
-    features: ['Comptes multi-utilisateurs', 'API & intégrations RH', 'Account manager dédié'],
+    features: ['Offre sur devis, à définir avec l’équipe'],
   },
 ];
 
@@ -71,11 +71,12 @@ export default function TarifsEntreprisesScreen({ navigation }: Props) {
               ))}
             </View>
             <Pressable
-              onPress={() => navigation.navigate('SelectionModePaiement')}
+              disabled={plan.name === 'Essentiel'}
+              onPress={() => navigation.navigate(plan.name === 'Entreprise' ? 'CentreAssistance' : 'SelectionModePaiement')}
               className={`mt-2 h-12 items-center justify-center rounded-xl ${plan.highlighted ? 'bg-white' : 'bg-primary-container'}`}
             >
               <Text className={`font-sans-semibold text-label-lg ${plan.highlighted ? 'text-primary' : 'text-on-primary-container'}`}>
-                Choisir ce plan
+                {plan.name === 'Essentiel' ? 'Plan gratuit' : plan.name === 'Entreprise' ? 'Demander un devis' : 'Choisir Premium'}
               </Text>
             </Pressable>
           </View>

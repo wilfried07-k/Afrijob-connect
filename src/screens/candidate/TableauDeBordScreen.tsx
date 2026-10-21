@@ -1,10 +1,13 @@
-import { View, Text, TextInput, Pressable, ScrollView } from 'react-native';
+import { ActivityIndicator, View, Text, TextInput, Pressable, ScrollView } from 'react-native';
+import { useEffect, useState } from 'react';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import Screen from '../../components/ui/Screen';
 import { colors } from '../../theme';
 import { CandidateStackParamList } from '../../navigation/types';
+import { useAuth } from '../../lib/auth';
+import { getJobs, type JobOffer } from '../../lib/api';
 
 type Category = {
   key: string;
@@ -22,66 +25,51 @@ const CATEGORIES: Category[] = [
   { key: 'artisanat', label: 'Artisanat', icon: 'brush', bg: 'bg-tertiary-fixed/30', color: colors.tertiary },
 ];
 
-type JobCard = {
-  key: string;
-  title: string;
-  company: string;
-  location: string;
-  contract: string;
-  salary: string;
-  highlighted?: boolean;
-};
 
-const RECOMMENDED_JOBS: JobCard[] = [
-  {
-    key: '1',
-    title: 'Product Designer Senior',
-    company: 'MTN Cameroon',
-    location: 'Akwa',
-    contract: 'Full-time',
-    salary: '450k - 600k CFA / mois',
-  },
-  {
-    key: '2',
-    title: 'Backend Developer',
-    company: 'Campost',
-    location: 'Bastos',
-    contract: 'Hybride',
-    salary: '500k - 750k CFA / mois',
-    highlighted: true,
-  },
-];
 
-type RecentJob = {
-  key: string;
-  title: string;
-  company: string;
-  location: string;
-  salary: string;
-  postedAgo: string;
-};
-
-const RECENT_JOBS: RecentJob[] = [
-  { key: '1', title: 'Ingénieur Génie Civil', company: 'BTP Global', location: 'Yaoundé', salary: '300k CFA', postedAgo: 'Il y a 2h' },
-  { key: '2', title: 'Responsable Marketing', company: 'Hilton', location: 'Yaoundé', salary: 'À négocier', postedAgo: 'Il y a 5h' },
-  { key: '3', title: 'Professeur d\u2019Anglais', company: 'Excel Academy', location: 'Douala', salary: '250k CFA', postedAgo: 'Il y a 1j' },
-];
 
 export default function TableauDeBordScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<CandidateStackParamList>>();
+  const { authState } = useAuth();
+  const [jobs, setJobs] = useState<JobOffer[]>([]);
+  const [loadingJobs, setLoadingJobs] = useState(true);
+
+  const greetingName = authState.profile?.full_name?.split(' ')[0] ?? 'Candidat';
+
+  const recommendedJobs = [...jobs]
+    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+    .slice(0, 2);
+  const recentJobs = [...jobs]
+    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+    .slice(2, 6);
+
+  const fetchJobs = async () => {
+    try {
+      const result = await getJobs();
+      setJobs(result);
+    } catch (error) {
+      console.error('Erreur chargement offres', error);
+    } finally {
+      setLoadingJobs(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchJobs();
+  }, []);
 
   return (
     <Screen>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 32 }}>
         {/* Header */}
         <View className="flex-row items-center justify-between px-container-margin pb-md pt-sm">
-          <View className="flex-row items-center gap-3">
+              <View className="flex-row items-center gap-3">
             <View className="h-10 w-10 items-center justify-center rounded-full border-2 border-primary/20 bg-surface-container-low">
               <Text className="font-sans-bold text-label-lg text-primary">SN</Text>
             </View>
             <View>
               <Text className="font-sans text-label-md text-on-surface-variant">Bonjour,</Text>
-              <Text className="font-sans-bold text-headline-md text-primary">Samuel N.</Text>
+                  <Text className="font-sans-bold text-headline-md text-primary">{greetingName}</Text>
             </View>
           </View>
           <Pressable
@@ -136,48 +124,48 @@ export default function TableauDeBordScreen() {
             <Text className="font-sans-semibold text-title-lg text-on-surface">Offres recommandées</Text>
           </View>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 20, gap: 16 }}>
-            {RECOMMENDED_JOBS.map((job) => (
-              <Pressable
-                key={job.key}
-                onPress={() => navigation.navigate('DetailOffre', { title: job.title, company: job.company })}
-                className={`w-72 rounded-lg p-md shadow-md ${
-                  job.highlighted ? 'bg-primary' : 'border border-outline-variant/30 bg-surface-container-lowest'
-                }`}
-              >
-                <View className="mb-md flex-row items-start justify-between">
-                  <View
-                    className={`h-12 w-12 items-center justify-center rounded-md shadow-sm ${
-                      job.highlighted ? 'bg-white' : 'bg-surface'
-                    }`}
-                  >
-                    <MaterialIcons name="business" size={22} color={job.highlighted ? colors.primary : colors.onSurfaceVariant} />
+            {loadingJobs ? (
+              <View className="items-center justify-center py-8">
+                <ActivityIndicator size="large" color={colors.primary} />
+              </View>
+            ) : (
+              recommendedJobs.map((job) => (
+                <Pressable
+                  key={job.id}
+                  onPress={() => navigation.navigate('DetailOffre', {
+                    jobId: job.id,
+                    title: job.title,
+                    company: job.company_name ?? 'Entreprise',
+                  })}
+                  className="w-72 rounded-lg p-md shadow-md bg-surface-container-lowest"
+                >
+                  <View className="mb-md flex-row items-start justify-between">
+                    <View className="h-12 w-12 items-center justify-center rounded-md shadow-sm bg-surface">
+                      <MaterialIcons name="business" size={22} color={colors.onSurfaceVariant} />
+                    </View>
+                    <View className="rounded-full px-3 py-1 bg-secondary-container/20">
+                      <Text className="font-sans text-label-md text-on-secondary-container">
+                        {job.contract_type ?? 'Contrat'}
+                      </Text>
+                    </View>
                   </View>
-                  <View className={`rounded-full px-3 py-1 ${job.highlighted ? 'bg-white/20' : 'bg-secondary-container/20'}`}>
-                    <Text className={`font-sans text-label-md ${job.highlighted ? 'text-white' : 'text-on-secondary-container'}`}>
-                      {job.contract}
-                    </Text>
-                  </View>
-                </View>
-                <Text className={`mb-1 font-sans-semibold text-title-lg ${job.highlighted ? 'text-white' : 'text-on-surface'}`}>
-                  {job.title}
-                </Text>
-                <Text className={`mb-md font-sans text-label-lg ${job.highlighted ? 'text-white/80' : 'text-on-surface-variant'}`}>
-                  {job.company} • {job.location}
-                </Text>
-                <View className="flex-row items-center justify-between">
-                  <Text className={`font-sans-bold text-label-lg ${job.highlighted ? 'text-white' : 'text-secondary'}`}>
-                    {job.salary}
+                  <Text className="mb-1 font-sans-semibold text-title-lg text-on-surface">
+                    {job.title}
                   </Text>
-                  <Pressable
-                    className={`h-8 w-8 items-center justify-center rounded-full ${
-                      job.highlighted ? 'bg-white/20' : 'bg-primary/10'
-                    }`}
-                  >
-                    <MaterialIcons name="bookmark-border" size={16} color={job.highlighted ? '#ffffff' : colors.primary} />
-                  </Pressable>
-                </View>
-              </Pressable>
-            ))}
+                  <Text className="mb-md font-sans text-label-lg text-on-surface-variant">
+                    {job.company_name ?? 'Entreprise'} • {job.city ?? 'Localisation'}
+                  </Text>
+                  <View className="flex-row items-center justify-between">
+                    <Text className="font-sans-bold text-label-lg text-secondary">
+                      {job.salary_min ? `${job.salary_min} - ${job.salary_max ?? job.salary_min} CFA` : 'À négocier'}
+                    </Text>
+                    <View className="h-8 w-8 items-center justify-center rounded-full bg-primary/10">
+                      <MaterialIcons name="bookmark-border" size={16} color={colors.primary} />
+                    </View>
+                  </View>
+                </Pressable>
+              ))
+            )}
           </ScrollView>
         </View>
 
@@ -212,10 +200,10 @@ export default function TableauDeBordScreen() {
         <View className="px-container-margin">
           <Text className="mb-md font-sans-semibold text-title-lg text-on-surface">Offres récentes</Text>
           <View className="gap-md">
-            {RECENT_JOBS.map((job) => (
+            {recentJobs.map((job) => (
               <Pressable
-                key={job.key}
-                onPress={() => navigation.navigate('DetailOffre', { title: job.title, company: job.company })}
+                key={job.id}
+                onPress={() => navigation.navigate('DetailOffre', { jobId: job.id, title: job.title, company: job.company_name })}
                 className="flex-row items-center gap-md rounded-lg border border-outline-variant/30 bg-white p-md shadow-sm"
               >
                 <View className="h-14 w-14 items-center justify-center rounded-md bg-surface-container-low">
@@ -224,12 +212,16 @@ export default function TableauDeBordScreen() {
                 <View className="flex-1">
                   <Text className="font-sans-semibold text-label-lg text-on-surface">{job.title}</Text>
                   <Text className="font-sans text-label-md text-on-surface-variant">
-                    {job.company} • {job.location}
+                    {job.company_name ?? 'Entreprise'} • {job.city ?? 'Localisation'}
                   </Text>
                 </View>
                 <View className="items-end">
-                  <Text className="font-sans-bold text-label-md text-secondary">{job.salary}</Text>
-                  <Text className="text-[10px] font-sans text-outline">{job.postedAgo}</Text>
+                  <Text className="font-sans-bold text-label-md text-secondary">
+                    {job.salary_min ? `${job.salary_min} - ${job.salary_max ?? job.salary_min} CFA` : 'À négocier'}
+                  </Text>
+                  <Text className="text-[10px] font-sans text-outline">
+                    {new Date(job.created_at).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' })}
+                  </Text>
                 </View>
               </Pressable>
             ))}

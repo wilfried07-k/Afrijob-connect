@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { View, Text, Pressable, Image, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import { View, Text, Pressable, Image, KeyboardAvoidingView, Platform, ScrollView, Alert } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { AuthStackParamList } from '../../navigation/types';
@@ -7,10 +7,10 @@ import Screen from '../../components/ui/Screen';
 import Button from '../../components/ui/Button';
 import TextField from '../../components/ui/TextField';
 import { colors } from '../../theme';
+import { login, LoginAccountType } from '../../lib/api';
+import { useAuth } from '../../lib/auth';
 
 type Props = NativeStackScreenProps<AuthStackParamList, 'Connexion'>;
-
-type AccountType = 'candidate' | 'recruiter';
 
 // Vrais logos des fournisseurs (PNG hotlink via icons8, gratuit pour usage faible volume).
 // Pour la production, télécharge ces images et mets-les dans /assets pour un require() local,
@@ -22,20 +22,38 @@ const SOCIAL_PROVIDERS = [
 ] as const;
 
 export default function ConnexionScreen({ navigation }: Props) {
-  const [accountType, setAccountType] = useState<AccountType>('candidate');
+  const [accountType, setAccountType] = useState<LoginAccountType>('candidate');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const handleLogin = () => {
+  const { signIn } = useAuth();
+
+  const handleLogin = async () => {
     setLoading(true);
-    // TODO: brancher l'appel API réel (auth/login)
-    setTimeout(() => {
+    try {
+      const response = await login({
+        email,
+        password,
+        account_type: accountType,
+      });
+
+      await signIn(response.access_token, response.account_type, response.user_id);
+
+      if (response.account_type === 'candidate') {
+        (navigation.getParent() as any)?.navigate('CandidateApp');
+      } else if (response.account_type === 'recruiter') {
+        (navigation.getParent() as any)?.navigate('RecruiterApp');
+      } else if (response.account_type === 'admin') {
+        (navigation.getParent() as any)?.navigate('AdminApp');
+      } else {
+        Alert.alert('Type de compte invalide', 'Impossible de déterminer la destination après connexion.');
+      }
+    } catch (error) {
+      Alert.alert('Erreur de connexion', (error as Error).message);
+    } finally {
       setLoading(false);
-      (navigation.getParent() as any)?.navigate(
-        accountType === 'candidate' ? 'CandidateApp' : 'RecruiterApp'
-      );
-    }, 1200);
+    }
   };
 
   return (
@@ -64,8 +82,9 @@ export default function ConnexionScreen({ navigation }: Props) {
 
           {/* Account type selector */}
           <View className="mb-lg flex-row gap-2 rounded-xl border border-outline-variant/30 bg-surface-container-lowest p-1.5 shadow-sm">
-            {(['candidate', 'recruiter'] as AccountType[]).map((type) => {
+            {(['candidate', 'recruiter', 'admin'] as LoginAccountType[]).map((type) => {
               const active = type === accountType;
+              const label = type === 'candidate' ? 'Candidat' : type === 'recruiter' ? 'Recruteur' : 'Admin';
               return (
                 <Pressable
                   key={type}
@@ -75,7 +94,7 @@ export default function ConnexionScreen({ navigation }: Props) {
                   }`}
                 >
                   <MaterialIcons
-                    name={type === 'candidate' ? 'work' : 'business'}
+                    name={type === 'candidate' ? 'work' : type === 'recruiter' ? 'business' : 'security'}
                     size={18}
                     color={active ? colors.onPrimaryContainer : colors.onSurfaceVariant}
                   />
@@ -84,7 +103,7 @@ export default function ConnexionScreen({ navigation }: Props) {
                       active ? 'text-on-primary-container' : 'text-on-surface-variant'
                     }`}
                   >
-                    {type === 'candidate' ? 'Candidat' : 'Recruteur'}
+                    {label}
                   </Text>
                 </Pressable>
               );

@@ -1,97 +1,121 @@
-import { useState } from 'react';
-import { View, Text, Pressable, ScrollView } from 'react-native';
+import { useCallback, useEffect, useState } from 'react';
+import { ActivityIndicator, Alert, Pressable, ScrollView, Text, View } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { CandidateStackParamList } from '../../navigation/types';
+import { listMySkillAssessments, listSkillAssessmentTests, submitSkillAssessment, type SkillAssessmentResult, type SkillAssessmentTest } from '../../lib/api';
+import { useAuth } from '../../lib/auth';
+import Screen from '../../components/ui/Screen';
 import { colors } from '../../theme';
 
-type Props = { navigation: { goBack: () => void; navigate: (screen: string, params?: any) => void } };
-
-const AVAILABLE_TESTS = [
-  { id: '1', name: 'JavaScript Avancé', duration: '20 min', questions: 15, level: 'Intermédiaire' },
-  { id: '2', name: 'Gestion de Projet Agile', duration: '15 min', questions: 12, level: 'Débutant' },
-  { id: '3', name: 'Excel & Analyse de Données', duration: '25 min', questions: 18, level: 'Avancé' },
-];
-
-const COMPLETED_TESTS = [
-  { id: '1', name: 'React & React Native', score: 92, badge: 'Expert' },
-  { id: '2', name: 'Anglais Professionnel', score: 78, badge: 'Confirmé' },
-];
+type Props = NativeStackScreenProps<CandidateStackParamList, 'TestDeCompetences'>;
 
 export default function TestDeCompetencesScreen({ navigation }: Props) {
-  const [started, setStarted] = useState<string | null>(null);
+  const { authState } = useAuth();
+  const [tests, setTests] = useState<SkillAssessmentTest[]>([]);
+  const [results, setResults] = useState<SkillAssessmentResult[]>([]);
+  const [activeTest, setActiveTest] = useState<SkillAssessmentTest | null>(null);
+  const [questionIndex, setQuestionIndex] = useState(0);
+  const [answers, setAnswers] = useState<Record<string, number>>({});
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
 
-  if (started) {
+  const load = useCallback(async () => {
+    setLoading(true); setError('');
+    try {
+      const testData = await listSkillAssessmentTests();
+      setTests(testData);
+      if (authState.profile?.candidate_profile_id) setResults(await listMySkillAssessments());
+      else setResults([]);
+    } catch (err) { setError((err as Error).message || 'Impossible de charger les tests.'); }
+    finally { setLoading(false); }
+  }, [authState.profile?.candidate_profile_id]);
+
+  useEffect(() => { void load(); }, [load]);
+
+  const start = (test: SkillAssessmentTest) => {
+    if (!authState.profile?.candidate_profile_id) { Alert.alert('Profil candidat requis', 'Complète ton profil candidat avant de passer un test.'); return; }
+    setActiveTest(test); setQuestionIndex(0); setAnswers({});
+  };
+
+  const submit = async () => {
+    if (!activeTest || activeTest.questions.some((question) => answers[question.id] === undefined)) {
+      Alert.alert('Test incomplet', 'Réponds à chaque question avant de terminer.');
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const result = await submitSkillAssessment({
+        test_id: activeTest.id,
+        answers: activeTest.questions.map((question) => ({ question_id: question.id, selected_option: answers[question.id] })),
+      });
+      setResults((current) => [result, ...current]);
+      setActiveTest(null);
+      navigation.navigate('ResultatsCertification', { assessmentId: result.id });
+    } catch (err) { Alert.alert('Erreur', (err as Error).message || 'Impossible d’enregistrer le résultat.'); }
+    finally { setSubmitting(false); }
+  };
+
+  if (activeTest) {
+    const question = activeTest.questions[questionIndex];
     return (
-      <View className="flex-1 items-center justify-center gap-lg bg-background px-container-margin">
-        <View className="h-24 w-24 items-center justify-center rounded-full bg-secondary-container shadow-lg">
-          <MaterialIcons name="emoji-events" size={44} color={colors.onSecondaryContainer} />
+      <Screen>
+        <View className="h-16 flex-row items-center gap-3 px-container-margin">
+          <Pressable onPress={() => setActiveTest(null)} hitSlop={8}><MaterialIcons name="close" size={24} color={colors.primary} /></Pressable>
+          <Text className="font-sans-bold text-headline-md text-primary">{activeTest.name}</Text>
         </View>
-        <Text className="font-sans-bold text-headline-lg text-on-surface">Certification obtenue !</Text>
-        <Text className="text-center font-sans text-body-lg text-on-surface-variant">
-          Vous avez obtenu un score de <Text className="font-sans-bold text-primary">88%</Text> — badge
-          "Confirmé" ajouté à votre profil public.
-        </Text>
-        <Pressable onPress={() => setStarted(null)} className="h-14 w-full flex-row items-center justify-center gap-2 rounded-full bg-primary shadow-lg">
-          <Text className="font-sans-semibold text-title-lg text-on-primary">Retour aux tests</Text>
-        </Pressable>
-      </View>
+        <ScrollView contentContainerStyle={{ padding: 20, gap: 18 }}>
+          <Text className="font-sans text-label-lg text-on-surface-variant">Question {questionIndex + 1} / {activeTest.questions.length}</Text>
+          <View className="h-2 overflow-hidden rounded-full bg-surface-container-high"><View className="h-full rounded-full bg-primary" style={{ width: `${(100 * (questionIndex + 1)) / activeTest.questions.length}%` as any }} /></View>
+          <Text className="font-sans-semibold text-headline-md text-on-surface">{question.prompt}</Text>
+          {question.options.map((option, index) => {
+            const selected = answers[question.id] === index;
+            return <Pressable key={index} onPress={() => setAnswers((current) => ({ ...current, [question.id]: index }))} className={'rounded-xl border p-md ' + (selected ? 'border-primary bg-primary/10' : 'border-outline-variant bg-surface-container-lowest')}>
+              <Text className="font-sans text-body-md text-on-surface">{option}</Text>
+            </Pressable>;
+          })}
+          {questionIndex < activeTest.questions.length - 1 ? (
+            <Pressable disabled={answers[question.id] === undefined} onPress={() => setQuestionIndex((index) => index + 1)} className="h-12 items-center justify-center rounded-lg bg-primary">
+              <Text className="font-sans-semibold text-label-lg text-white">Question suivante</Text>
+            </Pressable>
+          ) : (
+            <Pressable disabled={submitting || answers[question.id] === undefined} onPress={() => void submit()} className="h-12 flex-row items-center justify-center gap-2 rounded-lg bg-primary">
+              {submitting ? <ActivityIndicator color="#fff" /> : <><MaterialIcons name="check" size={18} color="#fff" /><Text className="font-sans-semibold text-label-lg text-white">Terminer et voir le résultat</Text></>}
+            </Pressable>
+          )}
+        </ScrollView>
+      </Screen>
     );
   }
 
   return (
-    <View className="flex-1 bg-background">
+    <Screen>
       <View className="h-16 flex-row items-center gap-3 px-container-margin">
-        <Pressable onPress={() => navigation.goBack()} hitSlop={8}>
-          <MaterialIcons name="arrow-back" size={24} color={colors.primary} />
-        </Pressable>
-        <Text className="font-sans-bold text-headline-md text-primary">Tests de Compétences</Text>
+        <Pressable onPress={() => navigation.goBack()} hitSlop={8}><MaterialIcons name="arrow-back" size={24} color={colors.primary} /></Pressable>
+        <Text className="font-sans-bold text-headline-md text-primary">Évaluations de compétences</Text>
       </View>
-
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: 20, gap: 24, paddingBottom: 32 }}>
-        <View className="gap-md">
-          <Text className="font-sans-semibold text-title-lg text-on-surface">Certifications obtenues</Text>
-          <View className="flex-row gap-md">
-            {COMPLETED_TESTS.map((t) => (
-              <View key={t.id} className="flex-1 items-center gap-2 rounded-xl border border-outline-variant/30 bg-surface-container-lowest p-md shadow-sm">
-                <Pressable
-                  onPress={() => navigation.navigate('ResultatsCertification', { testName: t.name, score: t.score })}
-                  className="items-center gap-2"
-                >
-                  <MaterialIcons name="military-tech" size={28} color={colors.tertiary} />
-                  <Text className="text-center font-sans-semibold text-label-lg text-on-surface">{t.name}</Text>
-                  <Text className="font-sans-bold text-title-lg text-primary">{t.score}%</Text>
-                  <View className="rounded-full bg-tertiary-fixed/30 px-2 py-0.5">
-                    <Text className="text-[10px] font-sans-bold text-tertiary">{t.badge}</Text>
-                  </View>
-                </Pressable>
-              </View>
-            ))}
-          </View>
+      <ScrollView contentContainerStyle={{ padding: 20, gap: 18, paddingBottom: 32 }}>
+        <View className="flex-row items-start gap-2 rounded-xl border border-tertiary/30 bg-tertiary/10 p-md">
+          <MaterialIcons name="info-outline" size={20} color={colors.tertiary} />
+          <Text className="flex-1 font-sans text-label-lg text-on-surface-variant">Ces quiz mesurent tes réponses à quelques questions et génèrent un résultat interne à EmploiCamer. Ils ne remplacent pas une certification professionnelle.</Text>
         </View>
-
-        <View className="gap-md">
+        {loading ? <ActivityIndicator color={colors.primary} /> : error ? <Text className="font-sans text-body-md text-error">{error}</Text> : <>
+          {results.length > 0 ? <View className="gap-md">
+            <Text className="font-sans-semibold text-title-lg text-on-surface">Mes résultats</Text>
+            {results.map((result) => <Pressable key={result.id} onPress={() => navigation.navigate('ResultatsCertification', { assessmentId: result.id })} className="flex-row items-center gap-md rounded-xl border border-outline-variant/30 bg-surface-container-lowest p-md">
+              <MaterialIcons name="military-tech" size={24} color={colors.tertiary} />
+              <View className="flex-1"><Text className="font-sans-semibold text-label-lg text-on-surface">{result.test_name}</Text><Text className="font-sans text-label-md text-on-surface-variant">{new Date(result.created_at).toLocaleDateString('fr-FR')} · {result.badge}</Text></View>
+              <Text className="font-sans-bold text-title-lg text-primary">{result.percentage}%</Text>
+            </Pressable>)}
+          </View> : null}
           <Text className="font-sans-semibold text-title-lg text-on-surface">Tests disponibles</Text>
-          <View className="gap-2">
-            {AVAILABLE_TESTS.map((test) => (
-              <View key={test.id} className="gap-2 rounded-xl border border-outline-variant/30 bg-surface-container-lowest p-md shadow-sm">
-                <View className="flex-row items-center gap-md">
-                  <View className="h-11 w-11 items-center justify-center rounded-full bg-primary/10">
-                    <MaterialIcons name="quiz" size={20} color={colors.primary} />
-                  </View>
-                  <View className="flex-1">
-                    <Text className="font-sans-semibold text-label-lg text-on-surface">{test.name}</Text>
-                    <Text className="font-sans text-label-md text-on-surface-variant">
-                      {test.questions} questions • {test.duration} • {test.level}
-                    </Text>
-                  </View>
-                </View>
-                <Pressable onPress={() => setStarted(test.id)} className="h-10 items-center justify-center rounded-lg bg-primary-container">
-                  <Text className="font-sans-semibold text-label-lg text-on-primary-container">Commencer le test</Text>
-                </Pressable>
-              </View>
-            ))}
-          </View>
-        </View>
+          {tests.map((test) => <View key={test.id} className="gap-2 rounded-xl border border-outline-variant/30 bg-surface-container-lowest p-md">
+            <View className="flex-row items-center gap-md"><MaterialIcons name="quiz" size={22} color={colors.primary} /><View className="flex-1"><Text className="font-sans-semibold text-label-lg text-on-surface">{test.name}</Text><Text className="font-sans text-label-md text-on-surface-variant">{test.questions.length} questions · correction enregistrée au serveur</Text></View></View>
+            <Pressable onPress={() => start(test)} className="h-10 items-center justify-center rounded-lg bg-primary-container"><Text className="font-sans-semibold text-label-lg text-on-primary-container">Commencer</Text></Pressable>
+          </View>)}
+        </>}
       </ScrollView>
-    </View>
+    </Screen>
   );
 }

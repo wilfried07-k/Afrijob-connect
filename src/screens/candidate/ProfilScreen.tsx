@@ -1,10 +1,14 @@
-import { View, Text, Pressable, ScrollView } from 'react-native';
+﻿import { useCallback, useState } from 'react';
+import { ActivityIndicator, View, Text, Pressable, ScrollView } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import Screen from '../../components/ui/Screen';
 import { colors } from '../../theme';
 import { CandidateStackParamList } from '../../navigation/types';
+import { useAuth } from '../../lib/auth';
+import { listCandidateApplications, listFavorites } from '../../lib/api';
 
 type MenuItem = {
   icon: keyof typeof MaterialIcons.glyphMap;
@@ -21,12 +25,12 @@ const MENU_GROUPS: MenuGroup[] = [
     title: 'Compte',
     items: [
       { icon: 'person', label: 'Informations personnelles' },
-      { icon: 'work', label: 'Préférences de recherche' },
+      { icon: 'work', label: 'PrÃ©fÃ©rences de recherche' },
       { icon: 'description', label: 'Mes candidatures' },
       { icon: 'event', label: 'Mon agenda' },
       { icon: 'description', label: 'Mon CV' },
       { icon: 'folder', label: 'Mon CV & Documents' },
-      { icon: 'tune', label: 'Centre de préférences' },
+      { icon: 'tune', label: 'Centre de prÃ©fÃ©rences' },
       { icon: 'bar-chart', label: 'Comparer les salaires' },
     ],
   },
@@ -35,40 +39,59 @@ const MENU_GROUPS: MenuGroup[] = [
     items: [
       { icon: 'notifications-active', label: 'Alertes emploi' },
       { icon: 'mail', label: 'Messages' },
-      { icon: 'tune', label: 'Préférences de notifications' },
+      { icon: 'tune', label: 'PrÃ©fÃ©rences de notifications' },
     ],
   },
   {
-    title: 'Carrière',
+    title: 'CarriÃ¨re',
     items: [
-      { icon: 'smart-toy', label: 'Coach Carrière IA' },
-      { icon: 'auto-fix-high', label: 'Rédaction assistée par IA' },
-      { icon: 'article', label: 'Conseils Carrière' },
-      { icon: 'quiz', label: 'Tests de Compétences' },
+      { icon: 'smart-toy', label: 'Coach CarriÃ¨re IA' },
+      { icon: 'auto-fix-high', label: 'RÃ©daction assistÃ©e par IA' },
+      { icon: 'article', label: 'Conseils CarriÃ¨re' },
+      { icon: 'quiz', label: 'Tests de CompÃ©tences' },
       { icon: 'collections-bookmark', label: 'Mon Portfolio' },
-      { icon: 'groups', label: 'Mon Réseau' },
+      { icon: 'groups', label: 'Mon RÃ©seau' },
       { icon: 'card-giftcard', label: 'Parrainage' },
     ],
   },
   {
     title: 'Support',
     items: [
-      { icon: 'settings', label: 'Paramètres' },
+      { icon: 'settings', label: 'ParamÃ¨tres' },
       { icon: 'help-outline', label: "Centre d'assistance" },
       { icon: 'workspace-premium', label: 'Support Prioritaire' },
-      { icon: 'description', label: 'Conditions & confidentialité' },
+      { icon: 'description', label: 'Conditions & confidentialitÃ©' },
     ],
   },
 ];
 
-const STATS = [
-  { label: 'Candidatures', value: '12' },
-  { label: 'Favoris', value: '8' },
-  { label: 'Vues du profil', value: '146' },
-];
+
 
 export default function ProfilScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<CandidateStackParamList>>();
+  const { authState, signOut } = useAuth();
+  const candidateId = authState.profile?.candidate_profile_id;
+  const [applicationCount, setApplicationCount] = useState(0);
+  const [favoriteCount, setFavoriteCount] = useState(0);
+  const [loading, setLoading] = useState(true);
+  useFocusEffect(useCallback(() => {
+    let active = true;
+    const load = async () => {
+      if (!candidateId) { setLoading(false); return; }
+      setLoading(true);
+      try {
+        const [applications, favorites] = await Promise.all([listCandidateApplications(candidateId), listFavorites(candidateId)]);
+        if (active) { setApplicationCount(applications.length); setFavoriteCount(favorites.length); }
+      } catch { if (active) { setApplicationCount(0); setFavoriteCount(0); } }
+      finally { if (active) setLoading(false); }
+    };
+    void load();
+    return () => { active = false; };
+  }, [candidateId]));
+  const fullName = authState.profile?.full_name || 'Mon profil';
+  const initials = fullName.split(' ').map((part) => part[0]).join('').slice(0, 2).toUpperCase();
+  const stats = [{ label: 'Candidatures', value: String(applicationCount) }, { label: 'Favoris', value: String(favoriteCount) }];
+
   return (
     <Screen>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 32 }}>
@@ -79,18 +102,18 @@ export default function ProfilScreen() {
         >
           <View className="relative">
             <View className="h-24 w-24 items-center justify-center rounded-full border-4 border-primary-fixed bg-surface-container-low">
-              <Text className="font-sans-bold text-headline-lg text-primary">SN</Text>
+              <Text className="font-sans-bold text-headline-lg text-primary">{initials}</Text>
             </View>
-            <Pressable className="absolute bottom-0 right-0 h-8 w-8 items-center justify-center rounded-full border-2 border-white bg-primary">
+            <View className="absolute bottom-0 right-0 h-8 w-8 items-center justify-center rounded-full border-2 border-white bg-primary">
               <MaterialIcons name="edit" size={16} color="#ffffff" />
-            </Pressable>
+            </View>
           </View>
           <View className="items-center">
-            <Text className="font-sans-bold text-headline-lg text-on-surface">Samuel Ndongo</Text>
-            <Text className="font-sans-semibold text-title-lg text-primary">Développeur Fullstack</Text>
+            <Text className="font-sans-bold text-headline-lg text-on-surface">{fullName}</Text>
+            <Text className="font-sans-semibold text-title-lg text-primary">{authState.profile?.job_title || 'Titre professionnel à renseigner'}</Text>
             <View className="mt-1 flex-row items-center gap-1">
               <MaterialIcons name="location-on" size={16} color={colors.onSurfaceVariant} />
-              <Text className="font-sans text-label-lg text-on-surface-variant">Douala, Cameroun</Text>
+              <Text className="font-sans text-label-lg text-on-surface-variant">{authState.profile?.city || 'Ville à renseigner'}</Text>
             </View>
             <View className="mt-2 flex-row items-center gap-1">
               <MaterialIcons name="visibility" size={14} color={colors.primary} />
@@ -108,17 +131,17 @@ export default function ProfilScreen() {
             <MaterialIcons name="edit" size={18} color={colors.onPrimaryContainer} />
             <Text className="font-sans-semibold text-label-lg text-on-primary-container">Modifier</Text>
           </Pressable>
-          <Pressable className="h-12 flex-1 flex-row items-center justify-center gap-2 rounded-md bg-surface-container-high">
-            <MaterialIcons name="download" size={18} color={colors.primary} />
-            <Text className="font-sans-semibold text-label-lg text-primary">Télécharger CV</Text>
+          <Pressable onPress={() => navigation.navigate('CoffreFortDocuments')} className="h-12 flex-1 flex-row items-center justify-center gap-2 rounded-md bg-surface-container-high">
+            <MaterialIcons name="folder" size={18} color={colors.primary} />
+            <Text className="font-sans-semibold text-label-lg text-primary">Gérer mes documents</Text>
           </Pressable>
         </View>
 
         {/* Stats */}
         <View className="mb-lg flex-row justify-between rounded-lg border border-outline-variant/30 bg-surface-container-lowest px-container-margin py-md shadow-sm">
-          {STATS.map((stat) => (
+          {stats.map((stat) => (
             <View key={stat.label} className="items-center">
-              <Text className="font-sans-bold text-headline-md text-primary">{stat.value}</Text>
+              <Text className="font-sans-bold text-headline-md text-primary">{loading ? '…' : stat.value}</Text>
               <Text className="font-sans text-label-md text-on-surface-variant">{stat.label}</Text>
             </View>
           ))}
@@ -138,6 +161,9 @@ export default function ProfilScreen() {
                       className="flex-row items-center p-md"
                       onPress={() => {
                         switch (item.label) {
+                          case 'Messages':
+                            navigation.navigate('CandidateTabs', { screen: 'Messages' });
+                            break;
                           case 'Mes candidatures':
                             navigation.navigate('SuiviCandidatures');
                             break;
@@ -159,10 +185,10 @@ export default function ProfilScreen() {
                           case 'Alertes emploi':
                             navigation.navigate('GestionAlertesEmploi');
                             break;
-                          case 'Préférences de notifications':
+                          case 'PrÃ©fÃ©rences de notifications':
                             navigation.navigate('ParametresNotifications');
                             break;
-                          case 'Paramètres':
+                          case 'ParamÃ¨tres':
                             navigation.navigate('ParametresCompte');
                             break;
                           case "Centre d'assistance":
@@ -171,31 +197,31 @@ export default function ProfilScreen() {
                           case 'Support Prioritaire':
                             navigation.navigate('SupportPrioritaire');
                             break;
-                          case 'Conditions & confidentialité':
+                          case 'Conditions & confidentialitÃ©':
                             navigation.navigate('MentionsLegales');
                             break;
-                          case 'Coach Carrière IA':
+                          case 'Coach CarriÃ¨re IA':
                             navigation.navigate('CoachingCarriereIA');
                             break;
-                          case 'Conseils Carrière':
+                          case 'Conseils CarriÃ¨re':
                             navigation.navigate('ConseilsCarriere');
                             break;
-                          case 'Tests de Compétences':
+                          case 'Tests de CompÃ©tences':
                             navigation.navigate('TestDeCompetences');
                             break;
                           case 'Mon Portfolio':
                             navigation.navigate('PortfolioProjets');
                             break;
-                          case 'Mon Réseau':
+                          case 'Mon RÃ©seau':
                             navigation.navigate('ReseauProfessionnel');
                             break;
                           case 'Parrainage':
                             navigation.navigate('Parrainage');
                             break;
-                          case 'Rédaction assistée par IA':
+                          case 'RÃ©daction assistÃ©e par IA':
                             navigation.navigate('RedactionAssisteeIA');
                             break;
-                          case 'Centre de préférences':
+                          case 'Centre de prÃ©fÃ©rences':
                             navigation.navigate('CentrePreferences');
                             break;
                         }
@@ -214,9 +240,9 @@ export default function ProfilScreen() {
             </View>
           ))}
 
-          <Pressable className="mt-md flex-row items-center justify-center gap-2 rounded-lg border border-error/30 py-md">
+          <Pressable onPress={() => { signOut(); (navigation as any).getParent()?.getParent()?.reset({ index: 0, routes: [{ name: 'Auth' }] }); }} className="mt-md flex-row items-center justify-center gap-2 rounded-lg border border-error/30 py-md">
             <MaterialIcons name="logout" size={18} color={colors.error} />
-            <Text className="font-sans-semibold text-label-lg text-error">Déconnexion</Text>
+            <Text className="font-sans-semibold text-label-lg text-error">DÃ©connexion</Text>
           </Pressable>
         </View>
       </ScrollView>

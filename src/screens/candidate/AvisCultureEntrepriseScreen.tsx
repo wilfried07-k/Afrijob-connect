@@ -1,99 +1,85 @@
-import { View, Text, Pressable, FlatList } from 'react-native';
+import { useCallback, useEffect, useState } from 'react';
+import { ActivityIndicator, Alert, ScrollView, Text, TextInput, Pressable, View } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { CandidateStackParamList } from '../../navigation/types';
+import { createCompanyReview, listCompanyReviews, type CompanyReview } from '../../lib/api';
+import { useAuth } from '../../lib/auth';
 import { colors } from '../../theme';
 
-type Props = { navigation: { goBack: () => void }; route?: { params?: { company?: string } } };
-
-type Review = {
-  id: string;
-  author: string;
-  role: string;
-  rating: number;
-  text: string;
-  timeAgo: string;
-};
-
-const REVIEWS: Review[] = [
-  { id: '1', author: 'Employé actuel', role: 'Développeur', rating: 5, text: "Excellente culture d'entreprise, management à l'écoute et bon équilibre vie pro/perso.", timeAgo: 'Il y a 2 semaines' },
-  { id: '2', author: 'Ancien employé', role: 'Chargé de clientèle', rating: 4, text: 'Bonnes opportunités de formation mais rythme de travail soutenu en période de forte activité.', timeAgo: 'Il y a 1 mois' },
-  { id: '3', author: 'Employé actuel', role: 'Manager', rating: 4, text: 'Salaires compétitifs pour le marché camerounais, avantages sociaux corrects.', timeAgo: 'Il y a 2 mois' },
-];
-
-const CRITERIA = [
-  { label: 'Équilibre vie pro/perso', score: 4.2 },
-  { label: 'Salaire & avantages', score: 4.0 },
-  { label: 'Culture & valeurs', score: 4.5 },
-  { label: "Opportunités d'évolution", score: 3.8 },
-];
+type Props = NativeStackScreenProps<CandidateStackParamList, 'AvisCultureEntreprise'>;
 
 export default function AvisCultureEntrepriseScreen({ navigation, route }: Props) {
-  const company = route?.params?.company ?? 'MTN Cameroon';
+  const company = route.params?.company ?? 'Entreprise';
+  const companyId = route.params?.companyId;
+  const { authState } = useAuth();
+  const [reviews, setReviews] = useState<CompanyReview[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [sending, setSending] = useState(false);
+  const [rating, setRating] = useState(5);
+  const [role, setRole] = useState('');
+  const [body, setBody] = useState('');
+
+  const load = useCallback(async () => {
+    if (!companyId) { setLoading(false); return; }
+    try { setReviews(await listCompanyReviews(companyId)); }
+    catch (error) { Alert.alert('Erreur', (error as Error).message || 'Impossible de charger les avis.'); }
+    finally { setLoading(false); }
+  }, [companyId]);
+
+  useEffect(() => { void load(); }, [load]);
+
+  const submit = async () => {
+    if (!companyId) { Alert.alert('Entreprise indisponible', 'Ouvre cette page depuis le détail d’une offre.'); return; }
+    if (!authState.profile?.candidate_profile_id) { Alert.alert('Profil requis', 'Connecte-toi et complète ton profil candidat pour publier un avis.'); return; }
+    if (body.trim().length < 20) { Alert.alert('Avis trop court', 'Écris au moins 20 caractères.'); return; }
+    setSending(true);
+    try {
+      const created = await createCompanyReview({ company_id: companyId, rating, role: role.trim() || undefined, body: body.trim() });
+      setReviews((current) => [created, ...current]);
+      setBody('');
+      setRole('');
+      Alert.alert('Avis publié', 'Merci pour ton retour sur cette entreprise.');
+    } catch (error) { Alert.alert('Erreur', (error as Error).message || 'Impossible de publier cet avis.'); }
+    finally { setSending(false); }
+  };
+
+  const average = reviews.length ? reviews.reduce((sum, review) => sum + review.rating, 0) / reviews.length : 0;
 
   return (
     <View className="flex-1 bg-background">
       <View className="h-16 flex-row items-center gap-3 px-container-margin">
-        <Pressable onPress={() => navigation.goBack()} hitSlop={8}>
-          <MaterialIcons name="arrow-back" size={24} color={colors.primary} />
-        </Pressable>
-        <Text className="font-sans-bold text-headline-md text-primary">Avis Entreprise</Text>
+        <Pressable onPress={() => navigation.goBack()} hitSlop={8}><MaterialIcons name="arrow-back" size={24} color={colors.primary} /></Pressable>
+        <Text className="font-sans-bold text-headline-md text-primary">Avis entreprise</Text>
       </View>
-
-      <FlatList
-        data={REVIEWS}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={{ padding: 20, gap: 12 }}
-        ListHeaderComponent={
-          <View className="mb-md gap-md">
-            <View className="items-center gap-2 rounded-xl bg-primary p-lg shadow-lg">
-              <Text className="font-sans-semibold text-label-lg text-white/80">{company}</Text>
-              <View className="flex-row items-baseline gap-1">
-                <Text className="font-sans-extrabold text-display-lg text-white">4.2</Text>
-                <Text className="font-sans text-white/70">/ 5</Text>
-              </View>
-              <View className="flex-row gap-1">
-                {[1, 2, 3, 4].map((i) => (
-                  <MaterialIcons key={i} name="star" size={18} color="#FFD700" />
-                ))}
-                <MaterialIcons name="star-half" size={18} color="#FFD700" />
-              </View>
-              <Text className="font-sans text-label-md text-white/70">Basé sur 86 avis</Text>
-            </View>
-
-            <View className="gap-2 rounded-xl border border-outline-variant/30 bg-surface-container-lowest p-md shadow-sm">
-              {CRITERIA.map((c) => (
-                <View key={c.label} className="flex-row items-center justify-between">
-                  <Text className="font-sans text-label-lg text-on-surface-variant">{c.label}</Text>
-                  <View className="flex-row items-center gap-2">
-                    <View className="h-2 w-20 overflow-hidden rounded-full bg-surface-variant">
-                      <View className="h-full rounded-full bg-primary" style={{ width: `${(c.score / 5) * 100}%` }} />
-                    </View>
-                    <Text className="w-8 font-sans-semibold text-label-md text-on-surface">{c.score}</Text>
-                  </View>
-                </View>
-              ))}
-            </View>
-
-            <Text className="font-sans-semibold text-title-lg text-on-surface">Avis des employés</Text>
-          </View>
-        }
-        renderItem={({ item }) => (
-          <View className="gap-2 rounded-xl border border-outline-variant/30 bg-surface-container-lowest p-md shadow-sm">
+      <ScrollView contentContainerStyle={{ padding: 20, gap: 16, paddingBottom: 36 }} keyboardShouldPersistTaps="handled">
+        <View className="items-center gap-2 rounded-xl bg-primary p-lg">
+          <Text className="font-sans-semibold text-label-lg text-white/80">{company}</Text>
+          <Text className="font-sans-extrabold text-display-lg text-white">{reviews.length ? average.toFixed(1) : '—'} / 5</Text>
+          <Text className="font-sans text-label-md text-white/80">{reviews.length} avis publiés par les candidats</Text>
+        </View>
+        <View className="gap-md rounded-xl border border-outline-variant/30 bg-surface-container-lowest p-md">
+          <Text className="font-sans-semibold text-title-lg text-on-surface">Partager ton expérience</Text>
+          <Text className="font-sans text-label-lg text-on-surface-variant">Ta note</Text>
+          <View className="flex-row gap-2">{[1, 2, 3, 4, 5].map((value) => <Pressable key={value} onPress={() => setRating(value)} hitSlop={8}><MaterialIcons name={value <= rating ? 'star' : 'star-border'} size={28} color={colors.tertiary} /></Pressable>)}</View>
+          <TextInput value={role} onChangeText={setRole} placeholder="Ton poste (facultatif)" placeholderTextColor={colors.outline} className="rounded-lg border border-outline-variant p-md font-sans text-body-md text-on-surface" />
+          <TextInput value={body} onChangeText={setBody} placeholder="Décris ton expérience (20 caractères minimum)" placeholderTextColor={colors.outline} multiline textAlignVertical="top" className="min-h-[120px] rounded-lg border border-outline-variant p-md font-sans text-body-md text-on-surface" />
+          <Pressable disabled={sending} onPress={() => void submit()} className="h-12 flex-row items-center justify-center gap-2 rounded-lg bg-primary">
+            {sending ? <ActivityIndicator color="#fff" /> : <><MaterialIcons name="send" size={18} color="#fff" /><Text className="font-sans-semibold text-label-lg text-white">Publier mon avis</Text></>}
+          </Pressable>
+        </View>
+        <Text className="font-sans-semibold text-title-lg text-on-surface">Avis publiés</Text>
+        {loading ? <ActivityIndicator color={colors.primary} /> : reviews.length === 0 ? <Text className="rounded-lg bg-surface-container p-md font-sans text-body-md text-on-surface-variant">Aucun avis enregistré pour le moment.</Text> : reviews.map((review) => (
+          <View key={review.id} className="gap-2 rounded-xl border border-outline-variant/30 bg-surface-container-lowest p-md">
             <View className="flex-row items-center justify-between">
-              <View>
-                <Text className="font-sans-semibold text-label-lg text-on-surface">{item.author}</Text>
-                <Text className="font-sans text-label-md text-on-surface-variant">{item.role}</Text>
-              </View>
-              <View className="flex-row gap-0.5">
-                {[1, 2, 3, 4, 5].map((i) => (
-                  <MaterialIcons key={i} name={i <= item.rating ? 'star' : 'star-border'} size={14} color={i <= item.rating ? colors.tertiary : colors.outlineVariant} />
-                ))}
-              </View>
+              <Text className="font-sans-semibold text-label-lg text-on-surface">{review.role || 'Membre candidat'}</Text>
+              <View className="flex-row">{[1, 2, 3, 4, 5].map((i) => <MaterialIcons key={i} name={i <= review.rating ? 'star' : 'star-border'} size={15} color={colors.tertiary} />)}</View>
             </View>
-            <Text className="font-sans text-body-md text-on-surface-variant">{item.text}</Text>
-            <Text className="font-sans text-[11px] text-outline">{item.timeAgo}</Text>
+            <Text className="font-sans text-body-md text-on-surface-variant">{review.body}</Text>
+            <Text className="font-sans text-label-md text-outline">{new Date(review.created_at).toLocaleDateString('fr-FR')}</Text>
           </View>
-        )}
-      />
+        ))}
+      </ScrollView>
     </View>
   );
 }

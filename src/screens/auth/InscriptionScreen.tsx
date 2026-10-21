@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { View, Text, Pressable, Image, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import { View, Text, Pressable, Image, KeyboardAvoidingView, Platform, ScrollView, Alert } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { AuthStackParamList } from '../../navigation/types';
@@ -7,6 +7,8 @@ import Screen from '../../components/ui/Screen';
 import Button from '../../components/ui/Button';
 import TextField from '../../components/ui/TextField';
 import { colors } from '../../theme';
+import { register, AccountType } from '../../lib/api';
+import { useAuth } from '../../lib/auth';
 
 type Props = NativeStackScreenProps<AuthStackParamList, 'Inscription'>;
 
@@ -23,7 +25,13 @@ export default function InscriptionScreen({ navigation }: Props) {
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
+  const [referralCode, setReferralCode] = useState('');
+  const [accountType, setAccountType] = useState<AccountType>('candidate');
   const [acceptedTerms, setAcceptedTerms] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
+  const { signIn } = useAuth();
 
   const canSubmit = fullName && email && phone && password && acceptedTerms;
 
@@ -55,6 +63,33 @@ export default function InscriptionScreen({ navigation }: Props) {
           </View>
 
           <View className="gap-md rounded-lg border border-outline-variant/30 bg-surface-container-lowest p-lg shadow-lg">
+            <View className="flex-row gap-2 rounded-xl border border-outline-variant/30 bg-surface-container-low p-1.5">
+              {(['candidate', 'recruiter'] as AccountType[]).map((type) => {
+                const active = type === accountType;
+                return (
+                  <Pressable
+                    key={type}
+                    onPress={() => setAccountType(type)}
+                    className={`flex-1 flex-row items-center justify-center gap-2 rounded-lg py-3 ${
+                      active ? 'bg-primary-container' : ''
+                    }`}
+                  >
+                    <MaterialIcons
+                      name={type === 'candidate' ? 'work' : 'business'}
+                      size={18}
+                      color={active ? colors.onPrimaryContainer : colors.onSurfaceVariant}
+                    />
+                    <Text
+                      className={`font-sans-semibold text-label-lg ${
+                        active ? 'text-on-primary-container' : 'text-on-surface-variant'
+                      }`}
+                    >
+                      {type === 'candidate' ? 'Candidat' : 'Recruteur'}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
             <TextField
               label="Nom complet"
               icon="person"
@@ -87,6 +122,14 @@ export default function InscriptionScreen({ navigation }: Props) {
               value={password}
               onChangeText={setPassword}
             />
+<TextField
+              label="Code de parrainage (facultatif)"
+              icon="card-giftcard"
+              placeholder="Ex. EC12AB34CD"
+              autoCapitalize="characters"
+              value={referralCode}
+              onChangeText={setReferralCode}
+            />
 
             {/* Terms */}
             <Pressable
@@ -107,10 +150,61 @@ export default function InscriptionScreen({ navigation }: Props) {
               </Text>
             </Pressable>
 
+            {errorMessage ? (
+              <View className="flex-row items-center gap-2 rounded-lg border border-error/30 bg-error-container/20 p-md">
+                <MaterialIcons name="error-outline" size={20} color={colors.error} />
+                <Text className="flex-1 font-sans text-body-md text-error">{errorMessage}</Text>
+              </View>
+            ) : null}
+
+            {successMessage ? (
+              <View className="gap-2 rounded-xl border border-secondary/40 bg-secondary-container/30 p-md">
+                <View className="flex-row items-center gap-2">
+                  <MaterialIcons name="check-circle" size={24} color={colors.secondary} />
+                  <Text className="font-sans-bold text-title-md text-on-surface">Compte créé avec succès !</Text>
+                </View>
+                <Text className="font-sans text-body-md text-on-surface-variant">{successMessage}</Text>
+                <Pressable
+                  onPress={() => {
+                    const destination = accountType === 'recruiter' ? 'RecruiterApp' : 'CandidateApp';
+                    (navigation.getParent() as any)?.navigate(destination);
+                  }}
+                  className="mt-1 h-10 items-center justify-center rounded-lg bg-secondary"
+                >
+                  <Text className="font-sans-semibold text-label-lg text-white">Accéder à mon espace</Text>
+                </Pressable>
+              </View>
+            ) : null}
+
             <Button
-              label="Créer mon compte"
-              disabled={!canSubmit}
-              onPress={() => navigation.navigate('VerificationOtp', { phone })}
+              label={loading ? 'Création en cours...' : canSubmit ? 'Créer mon compte' : 'Compléter le formulaire'}
+              disabled={!canSubmit || loading || !!successMessage}
+              onPress={async () => {
+                if (!canSubmit || loading) return;
+                setErrorMessage('');
+                setSuccessMessage('');
+                setLoading(true);
+                try {
+                  const response = await register({
+                    full_name: fullName.trim(),
+                    email: email.trim().toLowerCase(),
+                    phone: phone.trim(),
+                    password,
+                    account_type: accountType,
+                    referral_code: referralCode.trim() || undefined,
+                  });
+                  const destination = response.account_type === 'recruiter' ? 'RecruiterApp' : 'CandidateApp';
+                  await signIn(response.access_token, response.account_type, response.user_id);
+                  setSuccessMessage('Bienvenue sur EmploiCamer ! Redirection vers votre espace...');
+                  setTimeout(() => {
+                    (navigation.getParent() as any)?.navigate(destination);
+                  }, 1200);
+                } catch (error) {
+                  setErrorMessage((error as Error).message || 'Erreur lors de la création du compte');
+                } finally {
+                  setLoading(false);
+                }
+              }}
             />
 
             {/* Divider */}

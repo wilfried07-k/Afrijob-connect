@@ -1,34 +1,76 @@
-import { useState } from 'react';
-import { View, Text, Pressable, FlatList, Switch } from 'react-native';
+import { useCallback, useState } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
+import { ActivityIndicator, Alert, View, Text, Pressable, FlatList, Switch } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { colors } from '../../theme';
+import { useAuth } from '../../lib/auth';
+import { deleteAlert, listAlerts, updateAlert, type JobAlertItem } from '../../lib/api';
 
 type Props = {
   navigation: { goBack: () => void; navigate: (screen: string, params?: any) => void };
 };
 
-type Alert = {
-  id: string;
-  title: string;
-  location: string;
-  frequency: string;
-  lastNotif: string;
-  active: boolean;
+const FREQUENCY_LABELS: Record<string, string> = {
+  instant: 'Instantané',
+  daily: 'Quotidien',
+  weekly: 'Hebdomadaire',
 };
-
-const DEFAULT_ALERTS: Alert[] = [
-  { id: '1', title: 'Product Designer', location: 'Douala', frequency: 'Instantané', lastNotif: 'Il y a 2h', active: true },
-  { id: '2', title: 'Développeur Fullstack', location: 'Yaoundé', frequency: 'Quotidien', lastNotif: 'Il y a 1j', active: true },
-  { id: '3', title: 'Chef de Projet Digital', location: 'Remote', frequency: 'Hebdomadaire', lastNotif: 'Il y a 4j', active: false },
-];
-
 export default function GestionAlertesEmploiScreen({ navigation }: Props) {
-  const [alerts, setAlerts] = useState(DEFAULT_ALERTS);
+  const { authState } = useAuth();
+  const candidateId = authState.profile?.candidate_profile_id;
+  const [alerts, setAlerts] = useState<JobAlertItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
 
-  const toggle = (id: string) =>
-    setAlerts((list) => list.map((a) => (a.id === id ? { ...a, active: !a.active } : a)));
-  const remove = (id: string) => setAlerts((list) => list.filter((a) => a.id !== id));
+  const refreshAlerts = useCallback(async () => {
+    if (!candidateId) {
+      setAlerts([]);
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    setLoadError('');
+    try {
+      setAlerts(await listAlerts(candidateId));
+    } catch (error) {
+      setLoadError((error as Error).message || 'Impossible de charger les alertes.');
+    } finally {
+      setLoading(false);
+    }
+  }, [candidateId]);
 
+  useFocusEffect(useCallback(() => {
+    void refreshAlerts();
+  }, [refreshAlerts]));
+
+  const toggle = async (item: JobAlertItem) => {
+    try {
+      const updated = await updateAlert(item.id, { active: !item.active });
+      setAlerts((list) => list.map((alert) => alert.id === updated.id ? updated : alert));
+    } catch (error) {
+      Alert.alert('Erreur', (error as Error).message || 'Impossible de modifier cette alerte.');
+    }
+  };
+
+  const remove = (id: number) => {
+    Alert.alert('Supprimer cette alerte ?', 'Cette action est définitive.', [
+      { text: 'Annuler', style: 'cancel' },
+      {
+        text: 'Supprimer',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await deleteAlert(id);
+            setAlerts((list) => list.filter((alert) => alert.id !== id));
+          } catch (error) {
+            Alert.alert('Erreur', (error as Error).message || 'Impossible de supprimer cette alerte.');
+          }
+        },
+      },
+    ]);
+  };
+
+  const frequencyLabel = (frequency: string) => FREQUENCY_LABELS[frequency] ?? frequency;
   return (
     <View className="flex-1 bg-background">
       <View className="h-16 flex-row items-center gap-3 px-container-margin">
@@ -40,7 +82,7 @@ export default function GestionAlertesEmploiScreen({ navigation }: Props) {
 
       <FlatList
         data={alerts}
-        keyExtractor={(item) => item.id}
+        keyExtractor={(item) => String(item.id)}
         contentContainerStyle={{ padding: 20, gap: 16 }}
         ListHeaderComponent={
           <View className="mb-2 gap-md">
@@ -66,26 +108,24 @@ export default function GestionAlertesEmploiScreen({ navigation }: Props) {
             <View className="flex-row items-start justify-between">
               <Pressable
                 className="flex-1"
-                onPress={() => navigation.navigate('DetailsAlerteEmploi', { title: item.title, location: item.location })}
+                onPress={() => navigation.navigate('DetailsAlerteEmploi', { alertId: item.id, title: item.title, location: item.city ?? '' })}
               >
                 <Text className="font-sans-semibold text-title-lg text-on-surface">{item.title}</Text>
                 <View className="mt-1 flex-row flex-wrap gap-2">
                   <View className="flex-row items-center gap-1 rounded-full bg-surface-container-high px-3 py-1">
                     <MaterialIcons name="location-on" size={14} color={colors.onSurfaceVariant} />
-                    <Text className="font-sans text-label-md text-on-surface-variant">{item.location}</Text>
+                    <Text className="font-sans text-label-md text-on-surface-variant">{item.city ?? 'Toutes les villes'}</Text>
                   </View>
                   <View className="flex-row items-center gap-1 rounded-full bg-secondary-container/30 px-3 py-1">
                     <MaterialIcons name="schedule" size={14} color={colors.onSecondaryContainer} />
-                    <Text className="font-sans text-label-md text-on-secondary-container">{item.frequency}</Text>
+                    <Text className="font-sans text-label-md text-on-secondary-container">{frequencyLabel(item.frequency)}</Text>
                   </View>
                 </View>
               </Pressable>
-              <Switch value={item.active} onValueChange={() => toggle(item.id)} trackColor={{ true: colors.primary, false: colors.outlineVariant }} />
+              <Switch value={item.active} onValueChange={() => void toggle(item)} trackColor={{ true: colors.primary, false: colors.outlineVariant }} />
             </View>
             <View className="flex-row items-center justify-between border-t border-outline-variant/30 pt-md">
-              <Text className="font-sans italic text-label-md text-on-surface-variant">
-                Dernière notification : {item.lastNotif}
-              </Text>
+              <Text className="font-sans italic text-label-md text-on-surface-variant">{item.active ? 'Alerte active' : 'Alerte suspendue'}</Text>
               <View className="flex-row gap-1">
                 <Pressable className="rounded-lg p-2" onPress={() => navigation.navigate('CreerAlerteEmploi', { alertId: item.id, title: item.title })}>
                   <MaterialIcons name="edit" size={18} color={colors.primary} />
@@ -98,10 +138,16 @@ export default function GestionAlertesEmploiScreen({ navigation }: Props) {
           </View>
         )}
         ListEmptyComponent={
-          <View className="items-center gap-md py-xl">
-            <MaterialIcons name="notifications-off" size={48} color={colors.outline} />
-            <Text className="font-sans text-body-md text-on-surface-variant">Aucune alerte configurée</Text>
-          </View>
+          loading ? (
+            <ActivityIndicator size="large" color={colors.primary} />
+          ) : loadError ? (
+            <Text className="py-xl text-center font-sans text-body-md text-error">{loadError}</Text>
+          ) : (
+            <View className="items-center gap-md py-xl">
+              <MaterialIcons name="notifications-off" size={48} color={colors.outline} />
+              <Text className="font-sans text-body-md text-on-surface-variant">Aucune alerte configurée</Text>
+            </View>
+          )
         }
       />
     </View>

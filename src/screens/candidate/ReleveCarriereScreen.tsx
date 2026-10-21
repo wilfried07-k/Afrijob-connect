@@ -1,182 +1,112 @@
-import { View, Text, Pressable, ScrollView } from 'react-native';
+import { useCallback, useEffect, useState } from 'react';
+import { ActivityIndicator, Alert, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { colors } from '../../theme';
+import { createCareerExperience, deleteCareerExperience, listCareerExperiences, type CareerExperience } from '../../lib/api';
 
-/**
- * Destination : src/screens/candidate/ReleveCarriereScreen.tsx
- *
- * Relevé de carrière CNPS du candidat : matricule assuré social, historique
- * des employeurs et périodes cotisées, mois validés vers la pension (seuil
- * légal : 180 mois), estimation de pension.
- *
- * Données réelles utilisées (CNPS Cameroun 2026) :
- * - Pension = 30% du Salaire Moyen Cotisable (36 derniers mois) pour 180 mois,
- *   +1% par tranche de 12 mois supplémentaires, plafonné à 80% du SMC.
- * - Retraite à 60 ans (55 ans pour métiers pénibles).
- * Toutes les données de carrière ci-dessous sont des exemples statiques —
- * à remplacer par un appel à l'API CNPS / au backend de l'app.
- */
-
-type Props = {
-  navigation: { goBack: () => void; navigate: (screen: string, params?: any) => void };
-};
-
-const MONTHS_REQUIRED = 180;
-const MONTHS_VALIDATED = 96; // exemple : 8 ans cotisés
-
-type EmployerPeriod = {
-  id: string;
-  employer: string;
-  matriculeEmployeur: string;
-  startDate: string;
-  endDate: string | 'En cours';
-  status: 'ok' | 'litige';
-};
-
-const HISTORY: EmployerPeriod[] = [
-  {
-    id: '1',
-    employer: 'MTN Cameroon',
-    matriculeEmployeur: 'E-DLA-042817',
-    startDate: 'Sept. 2022',
-    endDate: 'En cours',
-    status: 'ok',
-  },
-  {
-    id: '2',
-    employer: 'Cameroon Soft Hub SARL',
-    matriculeEmployeur: 'E-YAO-118204',
-    startDate: 'Jan. 2019',
-    endDate: 'Août 2022',
-    status: 'ok',
-  },
-  {
-    id: '3',
-    employer: 'Digital Corp S.A.',
-    matriculeEmployeur: 'E-DLA-093456',
-    startDate: 'Mars 2018',
-    endDate: 'Déc. 2018',
-    status: 'litige',
-  },
-];
+type Props = { navigation: { goBack: () => void } };
 
 export default function ReleveCarriereScreen({ navigation }: Props) {
-  const progressPercent = Math.min(100, Math.round((MONTHS_VALIDATED / MONTHS_REQUIRED) * 100));
-  const monthsRemaining = Math.max(0, MONTHS_REQUIRED - MONTHS_VALIDATED);
+  const [items, setItems] = useState<CareerExperience[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [employer, setEmployer] = useState('');
+  const [jobTitle, setJobTitle] = useState('');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [description, setDescription] = useState('');
+  const [error, setError] = useState('');
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try { setItems(await listCareerExperiences()); }
+    catch (err) { setError((err as Error).message || 'Impossible de charger les expériences.'); }
+    finally { setLoading(false); }
+  }, []);
+
+  useEffect(() => { void load(); }, [load]);
+
+  const submit = async () => {
+    if (!employer.trim() || !jobTitle.trim() || !/^\d{4}-\d{2}-\d{2}$/.test(startDate)) {
+      Alert.alert('Informations requises', 'Renseigne l’employeur, le poste et une date de début au format AAAA-MM-JJ.');
+      return;
+    }
+    if (endDate && !/^\d{4}-\d{2}-\d{2}$/.test(endDate)) {
+      Alert.alert('Date incorrecte', 'La date de fin doit suivre le format AAAA-MM-JJ.');
+      return;
+    }
+    setSaving(true);
+    try {
+      const item = await createCareerExperience({
+        employer: employer.trim(),
+        job_title: jobTitle.trim(),
+        start_date: new Date(startDate + 'T00:00:00').toISOString(),
+        end_date: endDate ? new Date(endDate + 'T00:00:00').toISOString() : undefined,
+        description: description.trim() || undefined,
+      });
+      setItems((current) => [item, ...current].sort((a, b) => b.start_date.localeCompare(a.start_date)));
+      setEmployer(''); setJobTitle(''); setStartDate(''); setEndDate(''); setDescription('');
+      Alert.alert('Expérience enregistrée', 'Cette expérience a été ajoutée à ton historique personnel.');
+    } catch (err) { Alert.alert('Erreur', (err as Error).message || 'Impossible d’enregistrer cette expérience.'); }
+    finally { setSaving(false); }
+  };
+
+  const remove = (item: CareerExperience) => Alert.alert(
+    'Supprimer cette expérience ?',
+    item.employer + ' · ' + item.job_title,
+    [
+      { text: 'Annuler', style: 'cancel' },
+      { text: 'Supprimer', style: 'destructive', onPress: async () => {
+        try { await deleteCareerExperience(item.id); setItems((current) => current.filter((entry) => entry.id !== item.id)); }
+        catch (err) { Alert.alert('Erreur', (err as Error).message || 'Impossible de supprimer cette expérience.'); }
+      } },
+    ],
+  );
 
   return (
     <View className="flex-1 bg-background">
       <View className="h-16 flex-row items-center gap-3 px-container-margin">
-        <Pressable onPress={() => navigation.goBack()} hitSlop={8}>
-          <MaterialIcons name="arrow-back" size={24} color={colors.primary} />
-        </Pressable>
-        <Text className="font-sans-bold text-headline-md text-primary">Relevé de Carrière CNPS</Text>
+        <Pressable onPress={() => navigation.goBack()} hitSlop={8}><MaterialIcons name="arrow-back" size={24} color={colors.primary} /></Pressable>
+        <Text className="font-sans-bold text-headline-md text-primary">Mon expérience professionnelle</Text>
       </View>
-
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: 20, gap: 20, paddingBottom: 32 }}>
-        {/* Matricule assuré */}
-        <View className="gap-2 rounded-xl border border-outline-variant/30 bg-surface-container-lowest p-lg shadow-sm">
-          <View className="flex-row items-center gap-2">
-            <MaterialIcons name="badge" size={20} color={colors.primary} />
-            <Text className="font-sans-semibold text-label-lg uppercase tracking-wider text-primary">
-              Numéro d'Assuré Social
-            </Text>
-          </View>
-          <Text className="font-sans-bold text-headline-lg text-on-surface">1 09 88 04123 45</Text>
-          <View className="flex-row items-center gap-1">
-            <MaterialIcons name="check-circle" size={14} color={colors.secondary} />
-            <Text className="font-sans text-label-md text-secondary">Immatriculation vérifiée</Text>
-          </View>
-        </View>
-
-        {/* Progression vers la pension */}
-        <View className="gap-md rounded-xl border border-outline-variant/30 bg-surface-container-lowest p-lg shadow-sm">
-          <View className="flex-row items-center justify-between">
-            <Text className="font-sans-semibold text-title-lg text-on-surface">Droits à pension</Text>
-            <Text className="font-sans-bold text-label-lg text-primary">{MONTHS_VALIDATED} / {MONTHS_REQUIRED} mois</Text>
-          </View>
-          <View className="h-3 w-full overflow-hidden rounded-full bg-surface-container-highest">
-            <View className="h-full rounded-full bg-primary" style={{ width: `${progressPercent}%` }} />
-          </View>
-          <Text className="font-sans text-body-md text-on-surface-variant">
-            {monthsRemaining > 0
-              ? `Il vous reste ${monthsRemaining} mois de cotisation pour atteindre le seuil légal de pension (180 mois / 15 ans).`
-              : 'Vous avez atteint le seuil légal minimum pour une pension de retraite.'}
+      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 20, gap: 16, paddingBottom: 36 }}>
+        <View className="flex-row items-start gap-2 rounded-xl border border-tertiary/30 bg-tertiary/10 p-md">
+          <MaterialIcons name="info-outline" size={20} color={colors.tertiary} />
+          <Text className="flex-1 font-sans text-label-lg text-on-surface-variant">
+            Cet historique est saisi par toi et n’est pas un relevé officiel CNPS. Les cotisations, le matricule assuré et les droits à pension nécessitent une connexion aux services de la CNPS.
           </Text>
         </View>
-
-        {/* Estimation pension */}
-        <View className="gap-2 rounded-xl bg-primary p-lg shadow-lg">
-          <View className="flex-row items-center gap-2">
-            <MaterialIcons name="elderly" size={20} color="#ffffff" />
-            <Text className="font-sans-semibold text-label-lg text-white/80">Estimation de pension</Text>
-          </View>
-          <Text className="font-sans-extrabold text-display-lg text-white">142 500 FCFA / mois</Text>
-          <Text className="font-sans text-body-md text-white/85">
-            Basée sur 30% de votre Salaire Moyen Cotisable (36 derniers mois) au seuil de 180 mois.
-            Chaque année cotisée en plus ajoute 1% supplémentaire, jusqu'à 80% du SMC.
-          </Text>
-        </View>
-
-        {/* Historique employeurs */}
-        <View className="gap-md">
-          <Text className="font-sans-semibold text-title-lg text-on-surface">Historique des employeurs</Text>
-          <View className="gap-2">
-            {HISTORY.map((period) => (
-              <View
-                key={period.id}
-                className={`gap-2 rounded-xl border p-md shadow-sm ${
-                  period.status === 'litige'
-                    ? 'border-error/30 bg-error-container/5'
-                    : 'border-outline-variant/30 bg-surface-container-lowest'
-                }`}
-              >
-                <View className="flex-row items-start justify-between">
-                  <View className="flex-1">
-                    <Text className="font-sans-semibold text-label-lg text-on-surface">{period.employer}</Text>
-                    <Text className="font-sans text-label-md text-on-surface-variant">
-                      Matricule employeur : {period.matriculeEmployeur}
-                    </Text>
-                  </View>
-                  {period.status === 'litige' && (
-                    <View className="rounded-full bg-error px-2 py-0.5">
-                      <Text className="text-[10px] font-sans-bold text-white">À vérifier</Text>
-                    </View>
-                  )}
-                </View>
-                <View className="flex-row items-center gap-1">
-                  <MaterialIcons name="calendar-month" size={14} color={colors.onSurfaceVariant} />
-                  <Text className="font-sans text-label-md text-on-surface-variant">
-                    {period.startDate} — {period.endDate}
-                  </Text>
-                </View>
-                {period.status === 'litige' && (
-                  <Pressable className="mt-1 flex-row items-center gap-1 self-start">
-                    <MaterialIcons name="report-problem" size={14} color={colors.error} />
-                    <Text className="font-sans-semibold text-label-md text-error">
-                      Signaler une anomalie de cotisation
-                    </Text>
-                  </Pressable>
-                )}
-              </View>
-            ))}
-          </View>
-        </View>
-
-        {/* Actions */}
-        <View className="gap-md">
-          <Pressable className="h-12 flex-row items-center justify-center gap-2 rounded-xl border border-primary">
-            <MaterialIcons name="download" size={18} color={colors.primary} />
-            <Text className="font-sans-semibold text-label-lg text-primary">Télécharger le relevé (PDF)</Text>
+        <View className="gap-md rounded-xl border border-outline-variant/30 bg-surface-container-lowest p-md">
+          <Text className="font-sans-semibold text-title-lg text-on-surface">Ajouter une expérience</Text>
+          <TextInput value={employer} onChangeText={setEmployer} placeholder="Employeur" placeholderTextColor={colors.outline} className="rounded-lg border border-outline-variant p-md font-sans text-body-md text-on-surface" />
+          <TextInput value={jobTitle} onChangeText={setJobTitle} placeholder="Poste occupé" placeholderTextColor={colors.outline} className="rounded-lg border border-outline-variant p-md font-sans text-body-md text-on-surface" />
+          <TextInput value={startDate} onChangeText={setStartDate} placeholder="Date de début (AAAA-MM-JJ)" placeholderTextColor={colors.outline} autoCapitalize="none" className="rounded-lg border border-outline-variant p-md font-sans text-body-md text-on-surface" />
+          <TextInput value={endDate} onChangeText={setEndDate} placeholder="Date de fin (facultative, AAAA-MM-JJ)" placeholderTextColor={colors.outline} autoCapitalize="none" className="rounded-lg border border-outline-variant p-md font-sans text-body-md text-on-surface" />
+          <TextInput value={description} onChangeText={setDescription} placeholder="Description (facultative)" placeholderTextColor={colors.outline} multiline textAlignVertical="top" className="min-h-[90px] rounded-lg border border-outline-variant p-md font-sans text-body-md text-on-surface" />
+          <Pressable disabled={saving} onPress={() => void submit()} className="h-12 flex-row items-center justify-center gap-2 rounded-lg bg-primary">
+            {saving ? <ActivityIndicator color="#fff" /> : <><MaterialIcons name="add" size={20} color="#fff" /><Text className="font-sans-semibold text-label-lg text-white">Enregistrer l’expérience</Text></>}
           </Pressable>
-          <View className="flex-row items-start gap-2 rounded-xl border border-outline-variant/30 bg-surface-container-low p-md">
-            <MaterialIcons name="info" size={18} color={colors.onSurfaceVariant} />
-            <Text className="flex-1 font-sans text-label-md text-on-surface-variant">
-              Ce relevé est synchronisé avec votre compte MyCNPS. En cas d'écart avec vos bulletins de
-              salaire, contactez le centre de prévoyance sociale le plus proche.
-            </Text>
-          </View>
         </View>
+        <View className="flex-row items-center justify-between">
+          <Text className="font-sans-semibold text-title-lg text-on-surface">Historique enregistré</Text>
+          <Pressable onPress={() => void load()} hitSlop={8}><MaterialIcons name="refresh" size={20} color={colors.primary} /></Pressable>
+        </View>
+        {loading ? <ActivityIndicator color={colors.primary} /> : error ? <Text className="font-sans text-body-md text-error">{error}</Text> : items.length === 0 ? <Text className="rounded-lg bg-surface-container p-md font-sans text-body-md text-on-surface-variant">Aucune expérience ajoutée pour le moment.</Text> : items.map((item) => (
+          <View key={item.id} className="gap-2 rounded-xl border border-outline-variant/30 bg-surface-container-lowest p-md">
+            <View className="flex-row items-start justify-between gap-2">
+              <View className="flex-1">
+                <Text className="font-sans-semibold text-label-lg text-on-surface">{item.job_title}</Text>
+                <Text className="font-sans text-body-md text-on-surface-variant">{item.employer}</Text>
+              </View>
+              <Pressable onPress={() => remove(item)} hitSlop={8}><MaterialIcons name="delete-outline" size={20} color={colors.error} /></Pressable>
+            </View>
+            <Text className="font-sans text-label-md text-on-surface-variant">
+              {new Date(item.start_date).toLocaleDateString('fr-FR')} – {item.end_date ? new Date(item.end_date).toLocaleDateString('fr-FR') : 'En cours'}
+            </Text>
+            {item.description ? <Text className="font-sans text-body-md text-on-surface-variant">{item.description}</Text> : null}
+          </View>
+        ))}
       </ScrollView>
     </View>
   );

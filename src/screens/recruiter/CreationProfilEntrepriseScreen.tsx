@@ -1,8 +1,10 @@
-import { useState } from 'react';
-import { View, Text, TextInput, Pressable, ScrollView } from 'react-native';
+import { useEffect, useState } from 'react';
+import { Alert, View, Text, TextInput, Pressable, ScrollView } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import SelectField from '../../components/ui/SelectField';
 import { colors } from '../../theme';
+import { useAuth } from '../../lib/auth';
+import { getCompany, upsertCompany } from '../../lib/api';
 
 type Props = { navigation: { goBack: () => void } };
 
@@ -13,18 +15,57 @@ const SECTORS = [
   { label: 'Technologie', value: 'tech' },
 ];
 
-const SIZES = [
-  { label: '1 - 10 employés', value: 'small' },
-  { label: '11 - 50 employés', value: 'medium' },
-  { label: '51 - 500 employés', value: 'large' },
-  { label: '500+ employés', value: 'enterprise' },
-];
-
 export default function CreationProfilEntrepriseScreen({ navigation }: Props) {
-  const [name, setName] = useState('');
+  const { authState, refreshProfile } = useAuth();
+  const [name, setName] = useState(authState.profile?.company_name ?? '');
   const [sector, setSector] = useState('');
-  const [size, setSize] = useState('');
   const [description, setDescription] = useState('');
+  const [saving, setSaving] = useState(false);
+  const companyId = authState.profile?.company_id;
+
+  useEffect(() => {
+    let active = true;
+    if (!companyId) return () => { active = false; };
+    getCompany(companyId)
+      .then((company) => {
+        if (!active) return;
+        setName(company.name);
+        setSector(company.sector ?? '');
+        setDescription(company.description ?? '');
+      })
+      .catch((error) => {
+        if (active) Alert.alert('Erreur', (error as Error).message || 'Impossible de charger le profil entreprise.');
+      });
+    return () => { active = false; };
+  }, [companyId]);
+
+  const saveCompany = async () => {
+    if (!authState.userId) {
+      Alert.alert('Connexion requise', 'Connectez-vous pour créer le profil de l’entreprise.');
+      return;
+    }
+    if (!name.trim()) {
+      Alert.alert('Nom requis', 'Saisissez le nom de votre entreprise.');
+      return;
+    }
+    setSaving(true);
+    try {
+      await upsertCompany({
+        owner_user_id: authState.userId,
+        name: name.trim(),
+        sector: sector || undefined,
+        description: description.trim() || undefined,
+      });
+      await refreshProfile();
+      Alert.alert('Profil entreprise enregistré', 'Les informations de l’entreprise ont été sauvegardées.', [
+        { text: 'Continuer', onPress: () => navigation.goBack() },
+      ]);
+    } catch (error) {
+      Alert.alert('Erreur', (error as Error).message || 'Impossible d’enregistrer l’entreprise.');
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <View className="flex-1 bg-background">
@@ -36,13 +77,6 @@ export default function CreationProfilEntrepriseScreen({ navigation }: Props) {
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: 20, gap: 20, paddingBottom: 32 }}>
-        <Pressable className="items-center gap-2 self-center">
-          <View className="h-24 w-24 items-center justify-center rounded-2xl border-2 border-dashed border-outline-variant bg-surface-container-low">
-            <MaterialIcons name="add-a-photo" size={28} color={colors.onSurfaceVariant} />
-          </View>
-          <Text className="font-sans-semibold text-label-md text-primary">Ajouter un logo</Text>
-        </Pressable>
-
         <View className="gap-2">
           <Text className="font-sans-semibold text-label-lg text-on-surface-variant">Nom de l'entreprise</Text>
           <TextInput
@@ -60,11 +94,6 @@ export default function CreationProfilEntrepriseScreen({ navigation }: Props) {
         </View>
 
         <View className="gap-2">
-          <Text className="font-sans-semibold text-label-lg text-on-surface-variant">Taille de l'entreprise</Text>
-          <SelectField placeholder="Nombre d'employés" options={SIZES} value={size} onChange={setSize} />
-        </View>
-
-        <View className="gap-2">
           <Text className="font-sans-semibold text-label-lg text-on-surface-variant">Description</Text>
           <TextInput
             value={description}
@@ -79,10 +108,13 @@ export default function CreationProfilEntrepriseScreen({ navigation }: Props) {
         </View>
 
         <Pressable
-          onPress={() => navigation.goBack()}
+          onPress={saveCompany}
+          disabled={saving}
           className="h-14 items-center justify-center rounded-full bg-primary shadow-lg"
         >
-          <Text className="font-sans-semibold text-title-lg text-on-primary">Créer le profil</Text>
+          <Text className="font-sans-semibold text-title-lg text-on-primary">
+            {saving ? 'Enregistrement...' : 'Enregistrer le profil'}
+          </Text>
         </Pressable>
       </ScrollView>
     </View>

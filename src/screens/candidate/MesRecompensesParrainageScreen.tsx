@@ -1,72 +1,47 @@
-import { View, Text, Pressable, FlatList } from 'react-native';
+import { useCallback, useEffect, useState } from 'react';
+import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
+import { getMyReferrals, type ReferralSummary } from '../../lib/api';
 import { colors } from '../../theme';
 
 type Props = { navigation: { goBack: () => void } };
 
-type Reward = { id: string; label: string; amount: string; status: 'Disponible' | 'Retiré' | 'En attente'; date: string };
-
-const REWARDS: Reward[] = [
-  { id: '1', label: 'Parrainage — Paul Etoundi embauché', amount: '5 000 FCFA', status: 'Disponible', date: '28 Juin 2026' },
-  { id: '2', label: 'Bonus de bienvenue', amount: '1 000 FCFA', status: 'Retiré', date: '10 Mai 2026' },
-  { id: '3', label: 'Parrainage — Christelle M. en entretien', amount: '5 000 FCFA', status: 'En attente', date: '02 Juil 2026' },
-];
-
-const STATUS_STYLE: Record<Reward['status'], { bg: string; text: string }> = {
-  Disponible: { bg: 'bg-secondary/10', text: 'text-secondary' },
-  Retiré: { bg: 'bg-surface-container-high', text: 'text-on-surface-variant' },
-  'En attente': { bg: 'bg-tertiary/10', text: 'text-tertiary' },
-};
-
 export default function MesRecompensesParrainageScreen({ navigation }: Props) {
-  const availableTotal = REWARDS.filter((r) => r.status === 'Disponible').length * 5000;
+  const [summary, setSummary] = useState<ReferralSummary | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  const load = useCallback(async () => {
+    setLoading(true); setError('');
+    try { setSummary(await getMyReferrals()); }
+    catch (err) { setError((err as Error).message || 'Impossible de charger les inscriptions.'); }
+    finally { setLoading(false); }
+  }, []);
+
+  useEffect(() => { void load(); }, [load]);
 
   return (
     <View className="flex-1 bg-background">
       <View className="h-16 flex-row items-center gap-3 px-container-margin">
-        <Pressable onPress={() => navigation.goBack()} hitSlop={8}>
-          <MaterialIcons name="arrow-back" size={24} color={colors.primary} />
-        </Pressable>
-        <Text className="font-sans-bold text-headline-md text-primary">Mes Récompenses</Text>
+        <Pressable onPress={() => navigation.goBack()} hitSlop={8}><MaterialIcons name="arrow-back" size={24} color={colors.primary} /></Pressable>
+        <Text className="font-sans-bold text-headline-md text-primary">Suivi du parrainage</Text>
       </View>
-
-      <FlatList
-        data={REWARDS}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={{ padding: 20, gap: 12 }}
-        ListHeaderComponent={
-          <View className="mb-2 gap-md rounded-2xl bg-primary p-lg shadow-lg">
-            <Text className="font-sans text-label-lg text-white/80">Solde disponible</Text>
-            <Text className="font-sans-extrabold text-display-lg text-white">
-              {new Intl.NumberFormat('fr-FR').format(availableTotal)} FCFA
-            </Text>
-            <Pressable className="mt-1 flex-row items-center justify-center gap-2 rounded-xl bg-white py-3">
-              <MaterialIcons name="redeem" size={18} color={colors.primary} />
-              <Text className="font-sans-semibold text-label-lg text-primary">Retirer vers Mobile Money</Text>
-            </Pressable>
+      <ScrollView contentContainerStyle={{ padding: 20, gap: 14, paddingBottom: 32 }}>
+        <View className="gap-2 rounded-2xl bg-primary p-lg">
+          <Text className="font-sans text-label-lg text-white/80">Code de parrainage</Text>
+          <Text className="font-sans-extrabold text-headline-lg text-white">{summary?.code ?? '—'}</Text>
+          <Text className="font-sans text-body-md text-white/85">{summary?.total_signups ?? 0} inscription(s) attribuée(s)</Text>
+        </View>
+        {loading ? <ActivityIndicator color={colors.primary} /> : error ? <Text className="font-sans text-body-md text-error">{error}</Text> : summary?.signups.length ? summary.signups.map((item, index) => (
+          <View key={item.created_at + index} className="flex-row items-center gap-md rounded-xl border border-outline-variant/30 bg-surface-container-lowest p-md">
+            <MaterialIcons name={item.account_type === 'recruiter' ? 'business' : 'person'} size={22} color={colors.primary} />
+            <View className="flex-1"><Text className="font-sans-semibold text-label-lg text-on-surface">{item.account_type === 'recruiter' ? 'Recruteur inscrit' : 'Candidat inscrit'}</Text><Text className="font-sans text-label-md text-on-surface-variant">{new Date(item.created_at).toLocaleString('fr-FR')}</Text></View>
+            <MaterialIcons name="check-circle" size={18} color={colors.secondary} />
           </View>
-        }
-        renderItem={({ item }) => {
-          const style = STATUS_STYLE[item.status];
-          return (
-            <View className="flex-row items-center gap-md rounded-xl border border-outline-variant/30 bg-surface-container-lowest p-md shadow-sm">
-              <View className="h-11 w-11 items-center justify-center rounded-full bg-primary/10">
-                <MaterialIcons name="card-giftcard" size={18} color={colors.primary} />
-              </View>
-              <View className="flex-1">
-                <Text className="font-sans-semibold text-label-lg text-on-surface">{item.label}</Text>
-                <Text className="font-sans text-label-md text-on-surface-variant">{item.date}</Text>
-              </View>
-              <View className="items-end gap-1">
-                <Text className="font-sans-bold text-label-lg text-on-surface">{item.amount}</Text>
-                <View className={`rounded-full px-2 py-0.5 ${style.bg}`}>
-                  <Text className={`text-[10px] font-sans-bold ${style.text}`}>{item.status}</Text>
-                </View>
-              </View>
-            </View>
-          );
-        }}
-      />
+        )) : <Text className="rounded-lg bg-surface-container p-md font-sans text-body-md text-on-surface-variant">Aucune inscription liée à ce code.</Text>}
+        <Text className="text-center font-sans text-label-md text-on-surface-variant">Le suivi des inscriptions fonctionne. Les primes et retraits ne sont pas proposés.</Text>
+        <Pressable onPress={() => void load()} className="flex-row items-center justify-center gap-2 p-md"><MaterialIcons name="refresh" size={18} color={colors.primary} /><Text className="font-sans-semibold text-label-lg text-primary">Actualiser</Text></Pressable>
+      </ScrollView>
     </View>
   );
 }

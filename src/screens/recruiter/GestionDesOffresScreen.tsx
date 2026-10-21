@@ -1,37 +1,21 @@
-import { useState } from 'react';
-import { View, Text, Pressable, FlatList } from 'react-native';
+import { useEffect, useState } from 'react';
+import { ActivityIndicator, View, Text, Pressable, FlatList } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import Screen from '../../components/ui/Screen';
 import { colors } from '../../theme';
+import { useAuth } from '../../lib/auth';
+import { listCompanyJobs, type JobOffer } from '../../lib/api';
 import { RecruiterStackParamList } from '../../navigation/types';
 
 type Status = 'Ouvert' | 'Brouillon' | 'Fermé';
 
-type JobListing = {
-  id: string;
-  title: string;
-  icon: keyof typeof MaterialIcons.glyphMap;
-  location: string;
-  candidates: number;
-  status: Status;
-  iconBg: string;
-  iconColor: string;
-};
-
-const JOBS: JobListing[] = [
-  { id: '1', title: 'Senior Frontend Developer', icon: 'developer-mode', location: 'Douala', candidates: 24, status: 'Ouvert', iconBg: 'bg-secondary-container/30', iconColor: colors.secondary },
-  { id: '2', title: 'Chef Comptable', icon: 'account-balance', location: 'Yaoundé', candidates: 12, status: 'Ouvert', iconBg: 'bg-primary/10', iconColor: colors.primary },
-  { id: '3', title: 'Assistant RH', icon: 'group', location: 'Douala', candidates: 6, status: 'Brouillon', iconBg: 'bg-tertiary-fixed/30', iconColor: colors.tertiary },
-  { id: '4', title: 'Chargé de communication', icon: 'campaign', location: 'Remote', candidates: 41, status: 'Fermé', iconBg: 'bg-surface-container-highest', iconColor: colors.onSurfaceVariant },
-];
-
-const FILTERS: { label: string; value: Status | 'Tout'; count: number }[] = [
-  { label: 'Tout', value: 'Tout', count: 12 },
-  { label: 'Ouvert', value: 'Ouvert', count: 8 },
-  { label: 'Brouillon', value: 'Brouillon', count: 3 },
-  { label: 'Fermé', value: 'Fermé', count: 1 },
+const FILTERS: { label: string; value: Status | 'Tout' }[] = [
+  { label: 'Tout', value: 'Tout' },
+  { label: 'Ouvert', value: 'Ouvert' },
+  { label: 'Brouillon', value: 'Brouillon' },
+  { label: 'Fermé', value: 'Fermé' },
 ];
 
 const STATUS_STYLE: Record<Status, { bg: string; text: string }> = {
@@ -42,14 +26,46 @@ const STATUS_STYLE: Record<Status, { bg: string; text: string }> = {
 
 export default function GestionDesOffresScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RecruiterStackParamList>>();
+  const { authState } = useAuth();
+  const companyId = authState.profile?.company_id;
   const [filter, setFilter] = useState<Status | 'Tout'>('Tout');
-  const jobs = filter === 'Tout' ? JOBS : JOBS.filter((j) => j.status === filter);
+  const [jobs, setJobs] = useState<JobOffer[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const filteredJobs = filter === 'Tout' ? jobs : jobs.filter((job) => job.status === filter);
+
+  const filterWithCounts = FILTERS.map((item) => ({
+    ...item,
+    count: item.value === 'Tout' ? jobs.length : jobs.filter((job) => job.status === item.value).length,
+  }));
+
+  const fetchJobs = async () => {
+    if (!companyId) {
+      setJobs([]);
+      setLoading(false);
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const result = await listCompanyJobs(companyId);
+      setJobs(result);
+    } catch (error) {
+      console.error('Erreur chargement offres', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchJobs();
+  }, [companyId]);
 
   return (
     <Screen>
       <FlatList
-        data={jobs}
-        keyExtractor={(item) => item.id}
+        data={filteredJobs}
+        keyExtractor={(item) => item.id.toString()}
         contentContainerStyle={{ padding: 20, gap: 12 }}
         ListHeaderComponent={
           <View className="mb-md gap-lg">
@@ -69,7 +85,7 @@ export default function GestionDesOffresScreen() {
               <Text className="font-sans-semibold text-label-lg text-on-primary">Créer une offre</Text>
             </Pressable>
             <View className="flex-row flex-wrap gap-2">
-              {FILTERS.map((f) => {
+              {filterWithCounts.map((f) => {
                 const active = f.value === filter;
                 return (
                   <Pressable
@@ -88,33 +104,46 @@ export default function GestionDesOffresScreen() {
             </View>
           </View>
         }
+        ListEmptyComponent={
+          loading ? (
+            <View className="items-center justify-center py-20">
+              <ActivityIndicator size="large" color={colors.primary} />
+            </View>
+          ) : (
+            <View className="items-center justify-center py-20">
+              <Text className="font-sans text-label-lg text-on-surface-variant">Aucune offre trouvée.</Text>
+            </View>
+          )
+        }
         renderItem={({ item }) => (
           <View className="rounded-lg border border-outline-variant bg-surface-container-lowest p-md">
             <Pressable
               onPress={() => navigation.navigate('AnalytiqueOffre', { title: item.title })}
               className="flex-row items-center gap-md"
             >
-              <View className={`h-14 w-14 items-center justify-center rounded-lg ${item.iconBg}`}>
-                <MaterialIcons name={item.icon} size={28} color={item.iconColor} />
+              <View className="h-14 w-14 items-center justify-center rounded-lg bg-surface-container-highest">
+                <MaterialIcons name="work" size={28} color={colors.primary} />
               </View>
               <View className="flex-1">
                 <View className="flex-row flex-wrap items-center gap-2">
                   <Text className="font-sans-semibold text-headline-md text-on-surface">{item.title}</Text>
-                  <View className={`rounded px-2 py-0.5 ${STATUS_STYLE[item.status].bg}`}>
-                    <Text className={`text-[10px] font-sans-bold uppercase tracking-wider ${STATUS_STYLE[item.status].text}`}>
+                  <View className={`rounded px-2 py-0.5 ${STATUS_STYLE[item.status as Status]?.bg ?? 'bg-outline-variant'}`}>
+                    <Text className={`text-[10px] font-sans-bold uppercase tracking-wider ${STATUS_STYLE[item.status as Status]?.text ?? 'text-on-surface-variant'}`}>
                       {item.status}
                     </Text>
                   </View>
                 </View>
                 <View className="mt-1 flex-row items-center gap-1">
                   <MaterialIcons name="location-on" size={14} color={colors.onSurfaceVariant} />
-                  <Text className="font-sans text-body-md text-on-surface-variant">{item.location}</Text>
+                  <Text className="font-sans text-body-md text-on-surface-variant">{item.city ?? 'Localisation'}</Text>
                 </View>
               </View>
               <View className="items-end">
-                <Text className="font-sans-bold text-headline-md text-on-surface">{item.candidates}</Text>
+                <Text className="font-sans-bold text-headline-md text-on-surface">
+                  {new Date(item.created_at).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' })}
+                </Text>
                 <Text className="text-[10px] font-sans-bold uppercase tracking-tighter text-on-surface-variant">
-                  Candidats
+                  Publié
                 </Text>
               </View>
             </Pressable>

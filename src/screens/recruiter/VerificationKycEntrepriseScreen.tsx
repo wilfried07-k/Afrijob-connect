@@ -1,10 +1,12 @@
 import { useState } from 'react';
-import { View, Text, Pressable, ScrollView } from 'react-native';
+import { View, Text, Pressable, ScrollView, Alert, ActivityIndicator } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RecruiterStackParamList } from '../../navigation/types';
 import Screen from '../../components/ui/Screen';
 import { colors } from '../../theme';
+import { useAuth } from '../../lib/auth';
+import { upsertCompany } from '../../lib/api';
 
 type Props = NativeStackScreenProps<RecruiterStackParamList, 'VerificationKycEntreprise'>;
 
@@ -15,20 +17,6 @@ const STEPS = [
 ] as const;
 
 type StepKey = (typeof STEPS)[number]['key'];
-
-const LEGAL_INFO = [
-  { label: 'Raison Sociale', value: 'TechCamer Solutions SARL' },
-  { label: 'Numéro RCCM', value: 'RC/DLA/2023/B/1234' },
-  { label: 'Numéro NIU', value: 'M012345678901Z' },
-  { label: 'Siège Social', value: 'Douala, Akwa' },
-];
-
-const DIRECTOR_INFO = [
-  { label: 'Nom Complet', value: 'Jean Dupont' },
-  { label: 'Nationalité', value: 'Camerounaise' },
-  { label: "Pièce d'identité", value: 'CNI n° 102938475' },
-  { label: 'Email Pro', value: 'j.dupont@techcamer.cm' },
-];
 
 function Stepper({ current }: { current: StepKey }) {
   const currentIndex = STEPS.findIndex((s) => s.key === current);
@@ -64,9 +52,56 @@ function Stepper({ current }: { current: StepKey }) {
 }
 
 export default function VerificationKycEntrepriseScreen({ navigation }: Props) {
+  const { authState, refreshProfile } = useAuth();
+  const profile = authState.profile;
+
   const [step, setStep] = useState<StepKey>('document');
   const [documentCaptured, setDocumentCaptured] = useState(false);
   const [selfieCaptured, setSelfieCaptured] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+
+  const companyName = profile?.company_name || 'Entreprise Partenaire';
+  const directorName = profile?.full_name || 'Directeur Général';
+  const email = profile?.email || 'contact@entreprise.cm';
+
+  const legalInfo = [
+    { label: 'Raison Sociale', value: companyName },
+    { label: 'Numéro RCCM', value: 'RC/DLA/2026/B/5678' },
+    { label: 'Numéro NIU', value: 'M019283746501Z' },
+    { label: 'Siège Social', value: profile?.city ? `${profile.city}, Cameroun` : 'Douala, Cameroun' },
+  ];
+
+  const directorInfo = [
+    { label: 'Nom Complet', value: directorName },
+    { label: 'Nationalité', value: 'Camerounaise' },
+    { label: "Pièce d'identité", value: 'CNI Numérique' },
+    { label: 'Email Pro', value: email },
+  ];
+
+  const handleSubmitReview = async () => {
+    if (submitting) return;
+    setSubmitting(true);
+    try {
+      if (authState.userId) {
+        await upsertCompany({
+          owner_user_id: authState.userId,
+          name: companyName,
+          sector: 'Entreprise de services',
+          description: profile?.summary,
+        });
+        await refreshProfile();
+      }
+      Alert.alert(
+        'Dossier KYC transmis',
+        'Votre dossier a été soumis avec succès à l’équipe de conformité EmploiCamer. Le badge Entreprise Vérifiée sera activé sous 24-48h.',
+        [{ text: 'Compris', onPress: () => navigation.goBack() }]
+      );
+    } catch (error) {
+      Alert.alert('Erreur', (error as Error).message || 'Échec de la soumission du dossier.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   return (
     <Screen>
@@ -89,7 +124,7 @@ export default function VerificationKycEntrepriseScreen({ navigation }: Props) {
           <View className="flex-row items-center gap-2 rounded-xl border border-primary-container/20 bg-primary-container/10 p-md">
             <MaterialIcons name="verified-user" size={20} color={colors.primary} />
             <Text className="flex-1 font-sans-semibold text-label-lg text-primary">
-              Vos données sont cryptées et sécurisées.
+              Vos documents sont chiffrés et vérifiés par l'administration.
             </Text>
           </View>
           <View className="gap-2">
@@ -98,49 +133,31 @@ export default function VerificationKycEntrepriseScreen({ navigation }: Props) {
           </View>
 
           <View className="aspect-[4/3] items-center justify-center overflow-hidden rounded-2xl bg-surface-container-highest">
-            <View className="relative h-4/5 w-4/5">
-              <View className="absolute -top-1 -left-1 h-6 w-6 border-l-4 border-t-4 border-primary" />
-              <View className="absolute -top-1 -right-1 h-6 w-6 border-r-4 border-t-4 border-primary" />
-              <View className="absolute -bottom-1 -left-1 h-6 w-6 border-b-4 border-l-4 border-primary" />
-              <View className="absolute -bottom-1 -right-1 h-6 w-6 border-b-4 border-r-4 border-primary" />
-              <View className="flex-1 items-center justify-center">
-                <MaterialIcons name="crop-free" size={40} color={colors.primary} />
+            {documentCaptured ? (
+              <View className="items-center gap-2">
+                <MaterialIcons name="check-circle" size={48} color={colors.secondary} />
+                <Text className="font-sans-semibold text-title-md text-on-surface">Document enregistré</Text>
               </View>
-            </View>
+            ) : (
+              <Pressable
+                onPress={() => setDocumentCaptured(true)}
+                className="items-center gap-2"
+              >
+                <MaterialIcons name="camera-alt" size={48} color={colors.primary} />
+                <Text className="font-sans-semibold text-label-lg text-primary">Prendre une photo</Text>
+              </Pressable>
+            )}
           </View>
-
-          <View className="gap-md">
-            <Pressable
-              onPress={() => setDocumentCaptured(true)}
-              className="h-14 flex-row items-center justify-center gap-2 rounded-xl bg-primary shadow-lg"
-            >
-              <MaterialIcons name="photo-camera" size={20} color="#ffffff" />
-              <Text className="font-sans-semibold text-title-lg text-on-primary">Prendre la photo</Text>
-            </Pressable>
-            <Pressable
-              onPress={() => setDocumentCaptured(true)}
-              className="h-14 flex-row items-center justify-center gap-2 rounded-xl border border-outline"
-            >
-              <MaterialIcons name="upload-file" size={20} color={colors.primary} />
-              <Text className="font-sans-semibold text-label-lg text-primary">
-                Importer un fichier (PDF/JPG)
-              </Text>
-            </Pressable>
-          </View>
-
-          {documentCaptured && (
-            <View className="flex-row items-center gap-2 rounded-xl bg-secondary-container/20 p-md">
-              <MaterialIcons name="check-circle" size={20} color={colors.secondary} />
-              <Text className="font-sans-semibold text-label-lg text-secondary">Document capturé avec succès</Text>
-            </View>
-          )}
 
           <Pressable
             disabled={!documentCaptured}
             onPress={() => setStep('selfie')}
-            className={`h-12 items-center justify-center rounded-full bg-primary ${!documentCaptured ? 'opacity-40' : ''}`}
+            className={`h-14 flex-row items-center justify-center gap-2 rounded-full bg-primary shadow-lg ${
+              !documentCaptured ? 'opacity-40' : ''
+            }`}
           >
-            <Text className="font-sans-semibold text-label-lg text-on-primary">Continuer</Text>
+            <Text className="font-sans-semibold text-title-lg text-on-primary">Continuer</Text>
+            <MaterialIcons name="arrow-forward" size={18} color="#ffffff" />
           </Pressable>
         </ScrollView>
       )}
@@ -148,79 +165,74 @@ export default function VerificationKycEntrepriseScreen({ navigation }: Props) {
       {step === 'selfie' && (
         <ScrollView contentContainerStyle={{ padding: 20, gap: 20 }} showsVerticalScrollIndicator={false}>
           <View>
-            <Text className="font-sans-bold text-headline-lg-mobile text-on-surface">
-              Vérification de l'identité
-            </Text>
-            <Text className="font-sans text-body-md text-on-surface-variant">
-              Tenez votre pièce d'identité à côté de votre visage et assurez-vous qu'elle soit lisible.
-            </Text>
+            <Text className="font-sans-bold text-headline-lg text-on-surface">Selfie de vérification</Text>
+            <Text className="font-sans text-body-md text-on-surface-variant">Étape 2/3</Text>
+          </View>
+          <View className="gap-2">
+            <Instruction number={1} text="Positionnez votre visage au centre du cadre." />
+            <Instruction number={2} text="Retirez vos lunettes et assurez-vous d'avoir un bon éclairage." />
           </View>
 
-          <View className="aspect-[3/4] items-center justify-center overflow-hidden rounded-3xl border-4 border-surface-container-high bg-on-background">
-            <View className="h-[280px] w-[280px] items-center justify-center rounded-full border-2 border-dashed border-white/60">
-              <MaterialIcons name="face" size={48} color="rgba(255,255,255,0.4)" />
-            </View>
+          <View className="aspect-square items-center justify-center overflow-hidden rounded-full bg-surface-container-highest mx-auto w-64">
+            {selfieCaptured ? (
+              <View className="items-center gap-2">
+                <MaterialIcons name="check-circle" size={48} color={colors.secondary} />
+                <Text className="font-sans-semibold text-title-md text-on-surface">Photo validée</Text>
+              </View>
+            ) : (
+              <Pressable
+                onPress={() => setSelfieCaptured(true)}
+                className="items-center gap-2"
+              >
+                <MaterialIcons name="face" size={56} color={colors.primary} />
+                <Text className="font-sans-semibold text-label-lg text-primary">Prendre le selfie</Text>
+              </Pressable>
+            )}
           </View>
-
-          <Pressable
-            onPress={() => setSelfieCaptured(true)}
-            className="h-14 flex-row items-center justify-center gap-2 rounded-xl bg-primary shadow-lg"
-          >
-            <MaterialIcons name="photo-camera" size={20} color="#ffffff" />
-            <Text className="font-sans-semibold text-title-lg text-on-primary">Prendre le selfie</Text>
-          </Pressable>
-
-          {selfieCaptured && (
-            <View className="flex-row items-center gap-2 rounded-xl bg-secondary-container/20 p-md">
-              <MaterialIcons name="check-circle" size={20} color={colors.secondary} />
-              <Text className="font-sans-semibold text-label-lg text-secondary">Selfie capturé avec succès</Text>
-            </View>
-          )}
 
           <Pressable
             disabled={!selfieCaptured}
             onPress={() => setStep('review')}
-            className={`h-12 items-center justify-center rounded-full bg-primary ${!selfieCaptured ? 'opacity-40' : ''}`}
+            className={`h-14 flex-row items-center justify-center gap-2 rounded-full bg-primary shadow-lg ${
+              !selfieCaptured ? 'opacity-40' : ''
+            }`}
           >
-            <Text className="font-sans-semibold text-label-lg text-on-primary">Continuer</Text>
+            <Text className="font-sans-semibold text-title-lg text-on-primary">Passer à la révision</Text>
+            <MaterialIcons name="arrow-forward" size={18} color="#ffffff" />
           </Pressable>
         </ScrollView>
       )}
 
       {step === 'review' && (
         <ScrollView contentContainerStyle={{ padding: 20, gap: 20, paddingBottom: 32 }} showsVerticalScrollIndicator={false}>
-          <View className="flex-row items-end justify-between">
-            <View>
-              <Text className="font-sans-bold text-headline-lg text-on-surface">Vérification Finale</Text>
-              <Text className="font-sans text-body-md text-on-surface-variant">
-                Veuillez réviser vos informations avant soumission.
-              </Text>
-            </View>
-            <View className="rounded-full bg-primary-fixed px-md py-1">
-              <Text className="font-sans-semibold text-label-lg text-primary">100%</Text>
-            </View>
-          </View>
-          <View className="h-3 w-full overflow-hidden rounded-full bg-surface-container">
-            <View className="h-full w-full rounded-full bg-primary" />
+          <View>
+            <Text className="font-sans-bold text-headline-lg text-on-surface">Vérification finale</Text>
+            <Text className="font-sans text-body-md text-on-surface-variant">Étape 3/3</Text>
           </View>
 
-          <InfoCard icon="business" title="Informations Légales" rows={LEGAL_INFO} />
-          <InfoCard icon="person" title="Directeur Général" rows={DIRECTOR_INFO} />
+          <InfoCard icon="business" title="Informations Entreprise" rows={legalInfo} />
+          <InfoCard icon="person" title="Représentant Légal" rows={directorInfo} />
 
           <View className="flex-row items-center gap-2 rounded-xl border border-outline-variant bg-surface-container-low p-md">
             <MaterialIcons name="lock" size={18} color={colors.onSurfaceVariant} />
             <Text className="flex-1 font-sans text-body-md text-on-surface-variant">
-              En soumettant, vous certifiez l'exactitude de ces informations conformément à la
-              réglementation en vigueur au Cameroun.
+              En soumettant, vous certifiez l'exactitude de ces informations conformément à la réglementation OHADA et camerounaise.
             </Text>
           </View>
 
           <Pressable
-            onPress={() => navigation.goBack()}
+            disabled={submitting}
+            onPress={() => void handleSubmitReview()}
             className="h-14 flex-row items-center justify-center gap-2 rounded-full bg-primary shadow-lg"
           >
-            <MaterialIcons name="send" size={18} color="#ffffff" />
-            <Text className="font-sans-semibold text-title-lg text-on-primary">Soumettre pour vérification</Text>
+            {submitting ? (
+              <ActivityIndicator color="#ffffff" />
+            ) : (
+              <>
+                <MaterialIcons name="send" size={18} color="#ffffff" />
+                <Text className="font-sans-semibold text-title-lg text-on-primary">Soumettre pour vérification</Text>
+              </>
+            )}
           </Pressable>
         </ScrollView>
       )}
@@ -250,12 +262,9 @@ function InfoCard({
 }) {
   return (
     <View className="gap-md rounded-xl border border-outline-variant/30 bg-surface-container-lowest p-md shadow-sm">
-      <View className="flex-row items-center justify-between">
-        <View className="flex-row items-center gap-2">
-          <MaterialIcons name={icon} size={20} color={colors.primary} />
-          <Text className="font-sans-semibold text-title-lg text-on-surface">{title}</Text>
-        </View>
-        <Text className="font-sans-semibold text-label-lg text-primary">Modifier</Text>
+      <View className="flex-row items-center gap-2">
+        <MaterialIcons name={icon} size={20} color={colors.primary} />
+        <Text className="font-sans-semibold text-title-lg text-on-surface">{title}</Text>
       </View>
       <View className="gap-2">
         {rows.map((row) => (

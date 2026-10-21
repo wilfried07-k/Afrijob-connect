@@ -1,7 +1,9 @@
 import { useState } from 'react';
-import { View, Text, TextInput, Pressable, ScrollView } from 'react-native';
+import { View, Text, TextInput, Pressable, ScrollView, Alert } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { useAuth } from '../../lib/auth';
+import { createJob, type CreateJobPayload } from '../../lib/api';
 import { RecruiterStackParamList } from '../../navigation/types';
 import Screen from '../../components/ui/Screen';
 import SelectField from '../../components/ui/SelectField';
@@ -14,6 +16,8 @@ const CATEGORIES = [
   { label: 'Finance & Comptabilité', value: 'finance' },
   { label: 'Marketing & Communication', value: 'marketing' },
   { label: 'Ressources Humaines', value: 'hr' },
+  { label : 'Ventes & Développement Commercial', value: 'sales' },
+  { label: 'Santé & Médecine', value: 'health' },
 ];
 
 const LOCATIONS = [
@@ -21,6 +25,7 @@ const LOCATIONS = [
   { label: 'Yaoundé, Centre', value: 'yaounde' },
   { label: 'Bafoussam, Ouest', value: 'bafoussam' },
   { label: 'Télétravail (100%)', value: 'remote' },
+  { label: 'Autre', value: 'other' },
 ];
 
 const CONTRACT_TYPES = ['CDI', 'CDD', 'Freelance', 'Stage'];
@@ -38,10 +43,38 @@ export default function PublierOffreScreen({ navigation }: Props) {
   const [description, setDescription] = useState('');
   const [profile, setProfile] = useState('');
 
+  const { authState } = useAuth();
+  const companyId = authState.profile?.company_id;
+  const [submitting, setSubmitting] = useState(false);
   const isLastStep = step === STEP_LABELS.length - 1;
 
-  const handlePublish = () => {
-    navigation.navigate('RecruiterTabs');
+  const handlePublish = async () => {
+    if (!companyId) {
+      Alert.alert('Erreur', "Impossible de publier l'offre sans entreprise associée.");
+      return;
+    }
+
+    const payload: CreateJobPayload = {
+      company_id: companyId,
+      title,
+      description,
+      requirements: profile || description,
+      city: location || undefined,
+      contract_type: contract || undefined,
+      salary_min: salaryMin ? Number(salaryMin) : undefined,
+      salary_max: salaryMax ? Number(salaryMax) : undefined,
+    };
+
+    try {
+      setSubmitting(true);
+      await createJob(payload);
+      navigation.navigate('RecruiterTabs');
+    } catch (error) {
+      console.error('Erreur publication offre', error);
+      Alert.alert('Erreur', String(error));
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (

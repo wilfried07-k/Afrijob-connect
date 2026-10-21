@@ -1,21 +1,15 @@
-import { View, Text, Pressable, FlatList } from 'react-native';
+import { useEffect, useState } from 'react';
+import { View, Text, Pressable, FlatList, ActivityIndicator } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { colors } from '../../theme';
+import { useAuth } from '../../lib/auth';
+import { listNotifications, markNotificationRead, markAllNotificationsRead, type NotificationItem } from '../../lib/api';
 
 type Props = {
   navigation: { goBack: () => void };
 };
 
 type NotifType = 'application' | 'message' | 'interview' | 'job';
-
-type Notification = {
-  id: string;
-  type: NotifType;
-  title: string;
-  body: string;
-  timeAgo: string;
-  unread: boolean;
-};
 
 const ICONS: Record<NotifType, { icon: keyof typeof MaterialIcons.glyphMap; bg: string; color: string }> = {
   application: { icon: 'description', bg: 'bg-primary/10', color: colors.primary },
@@ -24,14 +18,53 @@ const ICONS: Record<NotifType, { icon: keyof typeof MaterialIcons.glyphMap; bg: 
   job: { icon: 'work', bg: 'bg-surface-container-highest', color: colors.onSurfaceVariant },
 };
 
-const NOTIFICATIONS: Notification[] = [
-  { id: '1', type: 'interview', title: 'Entretien confirmé', body: 'Votre entretien avec MTN Cameroon est confirmé pour lundi 14:00.', timeAgo: 'Il y a 10 min', unread: true },
-  { id: '2', type: 'message', title: 'Nouveau message', body: 'Orange Cameroun vous a envoyé un message.', timeAgo: 'Il y a 1h', unread: true },
-  { id: '3', type: 'application', title: 'Candidature consultée', body: 'Afriland First Bank a consulté votre candidature.', timeAgo: 'Il y a 3h', unread: false },
-  { id: '4', type: 'job', title: 'Nouvelle offre correspondante', body: '3 nouvelles offres de Développeur Fullstack à Douala.', timeAgo: 'Hier', unread: false },
-];
-
 export default function NotificationsScreen({ navigation }: Props) {
+  const { authState } = useAuth();
+  const [notifications, setNotifications] = useState<NotificationItem[] | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const userId = authState.userId;
+        if (userId) {
+          const items = await listNotifications(userId);
+          setNotifications(items);
+        } else {
+          setNotifications([]);
+        }
+      } catch (err) {
+        console.error('Erreur chargement notifications', err);
+        setNotifications([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+    load();
+  }, [authState.userId]);
+
+  const handleMarkRead = async (notificationId: number) => {
+    try {
+      const updated = await markNotificationRead(notificationId);
+      setNotifications((current) =>
+        current?.map((notif) => (notif.id === updated.id ? updated : notif)) ?? []
+      );
+    } catch (err) {
+      console.error('Erreur marquer notification lue', err);
+    }
+  };
+
+  const handleMarkAllRead = async () => {
+    try {
+      const userId = authState.userId;
+      if (!userId) return;
+      await markAllNotificationsRead(userId);
+      setNotifications((current) => current?.map((notif) => ({ ...notif, read: true })) ?? []);
+    } catch (err) {
+      console.error('Erreur marquer toutes notifications lues', err);
+    }
+  };
+
   return (
     <View className="flex-1 bg-background">
       <View className="h-16 flex-row items-center justify-between px-container-margin">
@@ -41,30 +74,47 @@ export default function NotificationsScreen({ navigation }: Props) {
           </Pressable>
           <Text className="font-sans-bold text-headline-md text-primary">Notifications</Text>
         </View>
-        <Text className="font-sans-semibold text-label-lg text-primary">Tout marquer lu</Text>
+        <Pressable onPress={handleMarkAllRead}>
+          <Text className="font-sans-semibold text-label-lg text-primary">Tout marquer lu</Text>
+        </Pressable>
       </View>
 
-      <FlatList
-        data={NOTIFICATIONS}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={{ padding: 20, gap: 8 }}
-        renderItem={({ item }) => {
-          const style = ICONS[item.type];
-          return (
-            <View className={`flex-row gap-md rounded-xl p-md ${item.unread ? 'bg-primary-container/5' : 'bg-surface-container-lowest'} border border-outline-variant/20`}>
-              <View className={`h-11 w-11 items-center justify-center rounded-full ${style.bg}`}>
-                <MaterialIcons name={style.icon} size={20} color={style.color} />
-              </View>
-              <View className="flex-1">
-                <Text className="font-sans-semibold text-label-lg text-on-surface">{item.title}</Text>
-                <Text className="font-sans text-body-md text-on-surface-variant">{item.body}</Text>
-                <Text className="mt-1 font-sans text-label-md text-outline">{item.timeAgo}</Text>
-              </View>
-              {item.unread && <View className="mt-1 h-2 w-2 rounded-full bg-primary" />}
+      {loading ? (
+        <View className="flex-1 items-center justify-center py-8">
+          <ActivityIndicator size="large" color={colors.primary} />
+        </View>
+      ) : (
+        <FlatList
+          data={notifications || []}
+          keyExtractor={(item) => String(item.id)}
+          contentContainerStyle={{ padding: 20, gap: 8 }}
+          ListEmptyComponent={
+            <View className="items-center gap-md py-xl">
+              <MaterialIcons name="notifications-off" size={48} color={colors.outline} />
+              <Text className="font-sans text-body-md text-on-surface-variant">Aucune notification pour le moment</Text>
             </View>
-          );
-        }}
-      />
+          }
+          renderItem={({ item }) => {
+            const style = ICONS[item.type as NotifType] ?? ICONS.job;
+            return (
+              <Pressable
+                onPress={() => handleMarkRead(item.id)}
+                className={`flex-row gap-md rounded-xl p-md ${item.read ? 'bg-surface-container-lowest' : 'bg-primary-container/5'} border border-outline-variant/20`}
+              >
+                <View className={`h-11 w-11 items-center justify-center rounded-full ${style.bg}`}>
+                  <MaterialIcons name={style.icon} size={20} color={style.color} />
+                </View>
+                <View className="flex-1">
+                  <Text className="font-sans-semibold text-label-lg text-on-surface">{item.title}</Text>
+                  <Text className="font-sans text-body-md text-on-surface-variant">{item.body}</Text>
+                  <Text className="mt-1 font-sans text-label-md text-outline">{item.created_at ? new Date(item.created_at).toLocaleString('fr-FR') : ''}</Text>
+                </View>
+                {!item.read && <View className="mt-1 h-2 w-2 rounded-full bg-primary" />}
+              </Pressable>
+            );
+          }}
+        />
+      )}
     </View>
   );
 }

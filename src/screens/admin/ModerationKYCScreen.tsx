@@ -1,164 +1,41 @@
-import { useState } from 'react';
-import { View, Text, Pressable, FlatList } from 'react-native';
+import { useCallback, useEffect, useState } from 'react';
+import { ActivityIndicator, Alert, View, Text, Pressable, FlatList } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import Screen from '../../components/ui/Screen';
 import { colors } from '../../theme';
+import { listPendingKyc, reviewKycCompany, type CompanyInfo } from '../../lib/api';
 
-type DocStatus = 'ok' | 'warning' | 'missing';
-
-type KycFile = {
-  id: string;
-  company: string;
-  location: string;
-  registeredAgo: string;
-  urgent?: boolean;
-  documents: { name: string; file: string; status: DocStatus; note?: string }[];
-};
-
-const KYC_FILES: KycFile[] = [
-  {
-    id: '1',
-    company: 'Afriland Builders S.A.',
-    location: 'Douala',
-    registeredAgo: 'Il y a 2h',
-    urgent: true,
-    documents: [
-      { name: 'RCCM', file: 'rccm_2023_afriland.pdf', status: 'ok' },
-      { name: 'NIU', file: 'niu_certif_final.pdf', status: 'ok' },
-      { name: 'Statuts', file: 'statuts_scanned.jpg', status: 'warning', note: 'Page 4 manquante' },
-    ],
-  },
-  {
-    id: '2',
-    company: 'Kmer Digital Services',
-    location: 'Yaoundé',
-    registeredAgo: 'Il y a 5h',
-    documents: [
-      { name: 'RCCM', file: 'rccm_kds.pdf', status: 'ok' },
-      { name: 'NIU', file: 'niu_kds.pdf', status: 'ok' },
-      { name: 'Statuts', file: '—', status: 'missing' },
-    ],
-  },
-];
-
-const FILTERS = ['Tous les dossiers', 'Urgence Haute', 'Compléments requis', 'Nouvelles inscriptions'];
-
-const DOC_STYLE: Record<DocStatus, { icon: keyof typeof MaterialIcons.glyphMap; color: string; bg: string }> = {
-  ok: { icon: 'check-circle', color: colors.secondary, bg: 'bg-surface-container-low' },
-  warning: { icon: 'warning', color: colors.error, bg: 'bg-error-container/5 border border-error/20' },
-  missing: { icon: 'error-outline', color: colors.error, bg: 'bg-error-container/5 border border-error/20' },
-};
-
+type Filter = 'Tous les dossiers' | 'Compléments requis';
+const FILTERS: Filter[] = ['Tous les dossiers', 'Compléments requis'];
 export default function ModerationKYCScreen() {
-  const [filter, setFilter] = useState(FILTERS[0]);
-  const [files, setFiles] = useState(KYC_FILES);
-
-  const decide = (id: string) => setFiles((list) => list.filter((f) => f.id !== id));
-
+  const [filter, setFilter] = useState<Filter>(FILTERS[0]);
+  const [files, setFiles] = useState<CompanyInfo[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [busyId, setBusyId] = useState<number | null>(null);
+  const [error, setError] = useState('');
+  const refresh = useCallback(async () => { setLoading(true); try { setFiles(await listPendingKyc()); setError(''); } catch (err) { setError((err as Error).message || 'Impossible de charger la file KYC.'); } finally { setLoading(false); } }, []);
+  useEffect(() => { void refresh(); }, [refresh]);
+  const approveCompany = async (companyId: number) => {
+    setBusyId(companyId);
+    try { await reviewKycCompany(companyId, true); setFiles((list) => list.filter((file) => file.id !== companyId)); }
+    catch (err) { Alert.alert('Validation impossible', (err as Error).message || 'Réessaie plus tard.'); }
+    finally { setBusyId(null); }
+  };
+  const requestMoreInfo = async (companyId: number) => {
+    setBusyId(companyId);
+    try {
+      await reviewKycCompany(companyId, false);
+      setFiles((list) => list.map((file) => file.id === companyId ? { ...file, review_status: 'Compléments requis' } : file));
+      Alert.alert('État enregistré', 'Le dossier est marqué « Compléments requis ». Aucune notification automatique n’est envoyée à l’entreprise.');
+    } catch (err) { Alert.alert('Mise à jour impossible', (err as Error).message || 'Réessaie plus tard.'); }
+    finally { setBusyId(null); }
+  };
+  const neededCount = files.filter((file) => file.review_status === 'Compléments requis').length;
+  const filteredFiles = filter === 'Compléments requis' ? files.filter((file) => file.review_status === 'Compléments requis') : files;
   return (
     <Screen>
-      <View className="gap-1 px-container-margin pb-md pt-md">
-        <Text className="font-sans-bold text-headline-lg text-on-surface">Vérification KYC</Text>
-        <Text className="font-sans text-body-md text-on-surface-variant">
-          Dossiers d'entreprises en attente de validation.
-        </Text>
-      </View>
-
-      <FlatList
-        data={files}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={{ padding: 20, gap: 12 }}
-        ListHeaderComponent={
-          <View className="mb-md gap-md">
-            <View className="flex-row flex-wrap gap-2">
-              {[
-                { label: 'En attente', value: '24', icon: 'pending-actions' as const, color: colors.primary },
-                { label: 'Urgent', value: '08', icon: 'priority-high' as const, color: colors.error },
-                { label: 'Validés (24h)', value: '152', icon: 'check-circle' as const, color: colors.secondary },
-              ].map((s) => (
-                <View key={s.label} className="min-w-[100px] flex-1 flex-row items-center gap-2 rounded-xl border border-outline-variant/30 bg-surface-container-lowest p-md shadow-sm">
-                  <MaterialIcons name={s.icon} size={20} color={s.color} />
-                  <View>
-                    <Text className="font-sans text-[10px] text-on-surface-variant">{s.label}</Text>
-                    <Text className="font-sans-bold text-title-lg" style={{ color: s.color }}>{s.value}</Text>
-                  </View>
-                </View>
-              ))}
-            </View>
-            <View className="flex-row flex-wrap gap-2">
-              {FILTERS.map((f) => {
-                const active = f === filter;
-                return (
-                  <Pressable
-                    key={f}
-                    onPress={() => setFilter(f)}
-                    className={`rounded-full px-md py-2 ${active ? 'bg-primary' : 'bg-surface-container-high'}`}
-                  >
-                    <Text className={`font-sans-medium text-label-md ${active ? 'text-on-primary' : 'text-on-surface-variant'}`}>
-                      {f}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-          </View>
-        }
-        renderItem={({ item }) => (
-          <View className="gap-md rounded-xl border border-outline-variant/30 bg-surface-container-lowest p-md shadow-sm">
-            <View className="flex-row items-center gap-md">
-              <View className="h-12 w-12 items-center justify-center rounded-lg border border-outline-variant bg-surface-container-low">
-                <MaterialIcons name="apartment" size={22} color={colors.onSurfaceVariant} />
-              </View>
-              <View className="flex-1">
-                <Text className="font-sans-semibold text-title-lg text-on-surface">{item.company}</Text>
-                <Text className="font-sans text-label-md text-on-surface-variant">
-                  Inscrit {item.registeredAgo} • {item.location}
-                </Text>
-                {item.urgent && (
-                  <View className="mt-1 flex-row items-center gap-1">
-                    <MaterialIcons name="bolt" size={12} color={colors.error} />
-                    <Text className="text-[10px] font-sans-bold uppercase tracking-wider text-error">Urgent</Text>
-                  </View>
-                )}
-              </View>
-            </View>
-
-            <View className="gap-2">
-              {item.documents.map((doc) => {
-                const style = DOC_STYLE[doc.status];
-                return (
-                  <View key={doc.name} className={`flex-row items-center justify-between rounded-lg p-2 ${style.bg}`}>
-                    <View className="flex-1">
-                      <View className="flex-row items-center justify-between">
-                        <Text className="font-sans-semibold text-xs text-on-surface-variant">{doc.name}</Text>
-                        <MaterialIcons name={style.icon} size={16} color={style.color} />
-                      </View>
-                      <Text className="font-sans-medium text-label-md text-primary">{doc.file}</Text>
-                      {doc.note && <Text className="text-[10px] font-sans-medium text-error">{doc.note}</Text>}
-                    </View>
-                  </View>
-                );
-              })}
-            </View>
-
-            <View className="flex-row gap-2">
-              <Pressable onPress={() => decide(item.id)} className="h-10 flex-1 flex-row items-center justify-center gap-1 rounded-lg bg-secondary shadow-sm">
-                <MaterialIcons name="done" size={16} color="#ffffff" />
-                <Text className="font-sans-semibold text-label-lg text-white">Approuver</Text>
-              </Pressable>
-              <Pressable onPress={() => decide(item.id)} className="h-10 flex-1 items-center justify-center rounded-lg bg-surface-container-high">
-                <Text className="font-sans-semibold text-label-lg text-on-surface-variant">Compléments requis</Text>
-              </Pressable>
-            </View>
-          </View>
-        )}
-        ListEmptyComponent={
-          <View className="items-center gap-md py-xl">
-            <MaterialIcons name="verified-user" size={48} color={colors.secondary} />
-            <Text className="font-sans text-body-md text-on-surface-variant">Aucun dossier en attente</Text>
-          </View>
-        }
-      />
+      <View className="gap-1 px-container-margin pb-md pt-md"><Text className="font-sans-bold text-headline-lg text-on-surface">Vérification KYC</Text><Text className="font-sans text-body-md text-on-surface-variant">Entreprises non vérifiées enregistrées dans la base.</Text></View>
+      {loading && !files.length ? <View className="items-center justify-center py-20"><ActivityIndicator size="large" color={colors.primary} /></View> : <FlatList data={filteredFiles} keyExtractor={(item) => String(item.id)} onRefresh={refresh} refreshing={loading} contentContainerStyle={{ padding: 20, gap: 12 }} ListHeaderComponent={<View className="mb-md gap-md"><View className="flex-row flex-wrap gap-2">{[{ label: 'À examiner', value: String(files.length), icon: 'pending-actions' as const, color: colors.primary }, { label: 'Compléments requis', value: String(neededCount), icon: 'info-outline' as const, color: colors.tertiary }].map((item) => <View key={item.label} className="min-w-[100px] flex-1 flex-row items-center gap-2 rounded-xl border border-outline-variant/30 bg-surface-container-lowest p-md"><MaterialIcons name={item.icon} size={20} color={item.color} /><View><Text className="font-sans text-[10px] text-on-surface-variant">{item.label}</Text><Text className="font-sans-bold text-title-lg" style={{ color: item.color }}>{item.value}</Text></View></View>)}</View><View className="flex-row gap-2">{FILTERS.map((item) => <Pressable key={item} onPress={() => setFilter(item)} className={`rounded-full px-md py-2 ${filter === item ? 'bg-primary' : 'bg-surface-container-high'}`}><Text className={`font-sans-medium text-label-md ${filter === item ? 'text-on-primary' : 'text-on-surface-variant'}`}>{item}</Text></Pressable>)}</View>{error ? <Text className="font-sans text-body-md text-error">{error}</Text> : null}</View>} renderItem={({ item }) => <View className="gap-md rounded-xl border border-outline-variant/30 bg-surface-container-lowest p-md shadow-sm"><View className="flex-row items-center gap-md"><View className="h-12 w-12 items-center justify-center rounded-lg border border-outline-variant bg-surface-container-low"><MaterialIcons name="apartment" size={22} color={colors.onSurfaceVariant} /></View><View className="flex-1"><Text className="font-sans-semibold text-title-lg text-on-surface">{item.name}</Text><Text className="font-sans text-label-md text-on-surface-variant">Secteur : {item.sector || 'Non précisé'}</Text><Text className="font-sans text-label-md text-on-surface-variant">Matricule employeur : {item.cnps_employer_matricule || 'Non renseigné'}</Text></View><Text className="rounded-full bg-tertiary/10 px-2 py-1 text-[10px] font-sans-semibold text-tertiary">{item.review_status || 'En attente'}</Text></View><Text className="font-sans text-body-md text-on-surface-variant">{item.description || 'Aucune description fournie'}</Text>{item.review_notes ? <Text className="font-sans text-label-md text-on-surface-variant">Note : {item.review_notes}</Text> : null}<View className="flex-row gap-2"><Pressable disabled={busyId === item.id} onPress={() => void approveCompany(item.id)} className="h-10 flex-1 items-center justify-center rounded-lg bg-secondary opacity-100"><Text className="font-sans-semibold text-label-lg text-white">Approuver</Text></Pressable><Pressable disabled={busyId === item.id} onPress={() => void requestMoreInfo(item.id)} className="h-10 flex-1 items-center justify-center rounded-lg border border-outline"><Text className="font-sans-semibold text-label-lg text-on-surface-variant">Marquer compléments requis</Text></Pressable></View></View>} ListEmptyComponent={<View className="items-center gap-md py-xl"><MaterialIcons name="verified-user" size={48} color={colors.secondary} /><Text className="font-sans text-body-md text-on-surface-variant">{error || (filter === 'Compléments requis' ? 'Aucun dossier en attente de compléments.' : 'Aucun dossier KYC en attente.')}</Text></View>} />}
     </Screen>
   );
 }

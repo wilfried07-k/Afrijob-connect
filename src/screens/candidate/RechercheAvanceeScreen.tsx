@@ -1,18 +1,19 @@
 import { useState } from 'react';
-import { View, Text, TextInput, Pressable, ScrollView, Switch } from 'react-native';
+import { ActivityIndicator, View, Text, TextInput, Pressable, ScrollView } from 'react-native';
 import Slider from '@react-native-community/slider';
 import { MaterialIcons } from '@expo/vector-icons';
 import Screen from '../../components/ui/Screen';
 import SelectField from '../../components/ui/SelectField';
 import { colors } from '../../theme';
+import { useNavigation } from '@react-navigation/native';
+import { getJobs, type JobOffer } from '../../lib/api';
 
 const SECTORS = [
   { label: 'Tous les secteurs', value: '' },
-  { label: 'Informatique & Télécom', value: 'it' },
+  { label: 'Télécommunications', value: 'telecom' },
   { label: 'Banque & Finance', value: 'finance' },
-  { label: 'Santé & Social', value: 'health' },
-  { label: 'Enseignement', value: 'education' },
-  { label: 'BTP & Construction', value: 'construction' },
+  { label: 'BTP & Construction', value: 'btp' },
+  { label: 'Technologie', value: 'tech' },
 ];
 
 const CITIES = [
@@ -27,11 +28,9 @@ const CITIES = [
 const CONTRACT_TYPES = [
   { label: 'CDI', value: 'cdi' },
   { label: 'CDD', value: 'cdd' },
-  { label: 'Stage', value: 'internship' },
+  { label: 'Stage', value: 'stage' },
   { label: 'Freelance', value: 'freelance' },
 ];
-
-const RECENT_SEARCHES = ['UI Designer Douala', 'Comptable Yaoundé', 'Développeur Fullstack'];
 
 const formatCFA = (value: number) => `${new Intl.NumberFormat('fr-FR').format(Math.round(value))} FCFA +`;
 
@@ -40,8 +39,38 @@ export default function RechercheAvanceeScreen() {
   const [sector, setSector] = useState('');
   const [city, setCity] = useState('');
   const [contracts, setContracts] = useState<string[]>(['cdi']);
-  const [nearMe, setNearMe] = useState(false);
   const [salary, setSalary] = useState(750000);
+  const [results, setResults] = useState<JobOffer[]>([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [hasSearched, setHasSearched] = useState(false);
+  const [searchError, setSearchError] = useState('');
+  const [recentSearches, setRecentSearches] = useState<string[]>([]);
+  const navigation = useNavigation<any>();
+
+  const searchJobs = async () => {
+    setSearchLoading(true);
+    setSearchError('');
+    setHasSearched(true);
+    try {
+      const matches = await getJobs({
+        keyword: query.trim() || undefined,
+        city: city || undefined,
+        contract_type: contracts.length ? contracts : undefined,
+        sector: sector || undefined,
+        minimum_salary: salary > 100000 ? salary : undefined,
+      });
+      setResults(matches);
+      const searchLabel = query.trim();
+      if (searchLabel) {
+        setRecentSearches((current) => [searchLabel, ...current.filter((item) => item !== searchLabel)].slice(0, 5));
+      }
+    } catch (error) {
+      setSearchError((error as Error).message || 'Impossible de charger les offres.');
+      setResults([]);
+    } finally {
+      setSearchLoading(false);
+    }
+  };
 
   const toggleContract = (value: string) => {
     setContracts((prev) => (prev.includes(value) ? prev.filter((c) => c !== value) : [...prev, value]));
@@ -64,25 +93,34 @@ export default function RechercheAvanceeScreen() {
       </View>
 
       <ScrollView contentContainerStyle={{ padding: 20, gap: 24 }} showsVerticalScrollIndicator={false}>
-        {/* Recent searches */}
+        {/* Searches recorded during this session */}
         <View className="gap-md">
           <View className="flex-row items-center justify-between">
             <Text className="font-sans-semibold text-title-lg text-on-surface">Recherches récentes</Text>
-            <Text className="font-sans-medium text-label-md text-primary">Effacer</Text>
-          </View>
-          <View className="flex-row flex-wrap gap-2">
-            {RECENT_SEARCHES.map((search) => (
-              <Pressable
-                key={search}
-                onPress={() => setQuery(search)}
-                className="flex-row items-center gap-1 rounded-full bg-surface-container px-md py-2"
-              >
-                <MaterialIcons name="history" size={16} color={colors.onSurfaceVariant} />
-                <Text className="font-sans text-label-md text-on-surface-variant">{search}</Text>
+            {recentSearches.length > 0 && (
+              <Pressable onPress={() => setRecentSearches([])}>
+                <Text className="font-sans-medium text-label-md text-primary">Effacer</Text>
               </Pressable>
-            ))}
+            )}
           </View>
+          {recentSearches.length === 0 ? (
+            <Text className="font-sans text-label-md text-on-surface-variant">Vos recherches apparaîtront ici.</Text>
+          ) : (
+            <View className="flex-row flex-wrap gap-2">
+              {recentSearches.map((search) => (
+                <Pressable
+                  key={search}
+                  onPress={() => setQuery(search)}
+                  className="flex-row items-center gap-1 rounded-full bg-surface-container px-md py-2"
+                >
+                  <MaterialIcons name="history" size={16} color={colors.onSurfaceVariant} />
+                  <Text className="font-sans text-label-md text-on-surface-variant">{search}</Text>
+                </Pressable>
+              ))}
+            </View>
+          )}
         </View>
+
 
         {/* Sector */}
         <View className="gap-md">
@@ -124,23 +162,7 @@ export default function RechercheAvanceeScreen() {
           </Text>
           <SelectField icon="location-on" placeholder="Cameroun (Toutes les villes)" options={CITIES} value={city} onChange={setCity} />
 
-          <View className="flex-row items-center gap-md rounded-lg border border-outline-variant/50 bg-surface-container-low p-md">
-            <View className="h-10 w-10 items-center justify-center rounded-full bg-primary/10">
-              <MaterialIcons name="near-me" size={20} color={colors.primary} />
-            </View>
-            <View className="flex-1">
-              <Text className="font-sans-semibold text-label-lg text-on-surface">Autour de moi</Text>
-              <Text className="font-sans text-label-md text-on-surface-variant">
-                Rechercher dans un rayon de 10km
-              </Text>
-            </View>
-            <Switch
-              value={nearMe}
-              onValueChange={setNearMe}
-              trackColor={{ true: colors.primary, false: colors.outlineVariant }}
-            />
-          </View>
-        </View>
+</View>
 
         {/* Salary range */}
         <View className="gap-md">
@@ -166,29 +188,38 @@ export default function RechercheAvanceeScreen() {
             <Text className="font-sans text-label-md text-outline">2.5M+</Text>
           </View>
         </View>
-
-        {/* Premium promo */}
-        <View className="rounded-lg bg-primary p-lg shadow-lg">
-          <View className="flex-row items-start justify-between gap-md">
-            <View className="flex-1 gap-2">
-              <View className="self-start rounded-full bg-white/20 px-2 py-0.5">
-                <Text className="font-sans-bold text-[10px] uppercase tracking-widest text-white">
-                  Premium
+        {hasSearched && (
+          <View className="gap-md">
+            <Text className="font-sans-semibold text-title-lg text-on-surface">
+              {results.length} offre{results.length === 1 ? '' : 's'} trouvée{results.length === 1 ? '' : 's'}
+            </Text>
+            {searchError ? (
+              <Text className="font-sans text-body-md text-error">{searchError}</Text>
+            ) : results.length === 0 ? (
+              <Text className="font-sans text-body-md text-on-surface-variant">
+                Aucune offre ne correspond à ces filtres.
+              </Text>
+            ) : results.map((job) => (
+              <Pressable
+                key={job.id}
+                onPress={() => navigation.getParent()?.navigate('DetailOffre', {
+                  jobId: job.id,
+                  title: job.title,
+                  company: job.company_name ?? 'Entreprise',
+                })}
+                className="rounded-lg border border-outline-variant/30 bg-surface-container-lowest p-md"
+              >
+                <Text className="font-sans-semibold text-title-lg text-on-surface">{job.title}</Text>
+                <Text className="font-sans text-label-md text-on-surface-variant">
+                  {job.company_name ?? 'Entreprise'} · {job.city ?? 'Cameroun'}
                 </Text>
-              </View>
-              <Text className="font-sans-bold text-headline-md leading-tight text-white">
-                Accédez aux offres exclusives
-              </Text>
-              <Text className="font-sans text-body-md text-white/90">
-                Certaines entreprises recrutent uniquement via nos services Premium de chasse de tête.
-              </Text>
-            </View>
-            <MaterialIcons name="workspace-premium" size={32} color="#ffffff" />
+                <Text className="font-sans-semibold text-label-md text-primary">
+                  {job.salary_min ? formatCFA(job.salary_min) : 'Salaire à discuter'}
+                </Text>
+              </Pressable>
+            ))}
           </View>
-          <Pressable className="mt-md self-start rounded-md bg-white px-md py-2">
-            <Text className="font-sans-semibold text-label-lg text-primary">En savoir plus</Text>
-          </Pressable>
-        </View>
+        )}
 
         {/* Reset */}
         <Pressable
@@ -197,7 +228,6 @@ export default function RechercheAvanceeScreen() {
             setSector('');
             setCity('');
             setContracts([]);
-            setNearMe(false);
             setSalary(750000);
             setQuery('');
           }}
@@ -211,8 +241,18 @@ export default function RechercheAvanceeScreen() {
 
       {/* Sticky CTA */}
       <View className="border-t border-outline-variant/20 px-container-margin py-md">
-        <Pressable className="h-14 flex-row items-center justify-center gap-md rounded-lg bg-primary shadow-lg">
-          <Text className="font-sans-bold text-headline-md text-on-primary">Afficher 142 résultats</Text>
+        <Pressable
+          className="h-14 flex-row items-center justify-center gap-md rounded-lg bg-primary shadow-lg"
+          onPress={searchJobs}
+          disabled={searchLoading}
+        >
+          {searchLoading ? (
+            <ActivityIndicator color="#ffffff" />
+          ) : (
+            <Text className="font-sans-bold text-headline-md text-on-primary">
+              {hasSearched ? results.length + ' résultats' : 'Rechercher les offres'}
+            </Text>
+          )}
           <MaterialIcons name="chevron-right" size={22} color="#ffffff" />
         </Pressable>
       </View>
