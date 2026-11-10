@@ -48,7 +48,7 @@ export default function CandidatureSpontaneeScreen({ navigation, route }: Props)
     <Screen>
       <View className="h-16 flex-row items-center justify-between px-container-margin">
         <Pressable onPress={() => navigation.goBack()} hitSlop={8}>
-          <MaterialIcons name="arrow-back" size={24} color={colors.primary} />
+          <MaterialIcons style={{ transform: [{ translateY: 4 }] }} name="arrow-back" size={24} color={colors.primary} />
         </Pressable>
         <Text className="font-sans-bold text-title-lg text-primary">EmploiCamer</Text>
         <View className="h-9 w-9 items-center justify-center rounded-full bg-primary-container">

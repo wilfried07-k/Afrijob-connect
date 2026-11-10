@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ActivityIndicator, View, Text, TextInput, Pressable, ScrollView } from 'react-native';
 import Slider from '@react-native-community/slider';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -7,6 +7,8 @@ import SelectField from '../../components/ui/SelectField';
 import { colors } from '../../theme';
 import { useNavigation } from '@react-navigation/native';
 import { getJobs, type JobOffer } from '../../lib/api';
+import { useRoute, type RouteProp } from '@react-navigation/native';
+import type { CandidateTabParamList } from '../../navigation/types';
 
 const SECTORS = [
   { label: 'Tous les secteurs', value: '' },
@@ -35,17 +37,25 @@ const CONTRACT_TYPES = [
 const formatCFA = (value: number) => `${new Intl.NumberFormat('fr-FR').format(Math.round(value))} FCFA +`;
 
 export default function RechercheAvanceeScreen() {
-  const [query, setQuery] = useState('');
+  const route = useRoute<RouteProp<CandidateTabParamList, 'RechercheAvancee'>>();
+  const [query, setQuery] = useState(route.params?.keyword ?? '');
   const [sector, setSector] = useState('');
   const [city, setCity] = useState('');
-  const [contracts, setContracts] = useState<string[]>(['cdi']);
-  const [salary, setSalary] = useState(750000);
+  const [contracts, setContracts] = useState<string[]>(route.params?.showAll ? [] : ['cdi']);
+  const [salary, setSalary] = useState(route.params?.showAll ? 100000 : 750000);
   const [results, setResults] = useState<JobOffer[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
   const [searchError, setSearchError] = useState('');
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
   const navigation = useNavigation<any>();
+
+  useEffect(() => {
+    setQuery(route.params?.keyword ?? '');
+    setContracts(route.params?.showAll ? [] : ['cdi']);
+    setSalary(route.params?.showAll ? 100000 : 750000);
+    setHasSearched(false);
+  }, [route.params]);
 
   const searchJobs = async () => {
     setSearchLoading(true);
@@ -59,7 +69,7 @@ export default function RechercheAvanceeScreen() {
         sector: sector || undefined,
         minimum_salary: salary > 100000 ? salary : undefined,
       });
-      setResults(matches);
+      setResults(route.params?.verifiedOnly ? matches.filter((job) => job.company_kyc_verified) : matches);
       const searchLabel = query.trim();
       if (searchLabel) {
         setRecentSearches((current) => [searchLabel, ...current.filter((item) => item !== searchLabel)].slice(0, 5));

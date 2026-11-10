@@ -1,6 +1,9 @@
 ﻿import { useEffect, useState } from 'react';
-import { ActivityIndicator, View, Text, Pressable, ScrollView } from 'react-native';
+import { ActivityIndicator, Alert, Image, View, Text, Pressable, ScrollView } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
+import * as SecureStore from 'expo-secure-store';
+import { Directory, File, Paths } from 'expo-file-system';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import Screen from '../../components/ui/Screen';
@@ -20,6 +23,29 @@ export default function ProfilEntrepriseScreen() {
   const [companyJobs, setCompanyJobs] = useState<JobOffer[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
+  const [logoUri, setLogoUri] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (authState.userId) void SecureStore.getItemAsync(`company-logo-${authState.userId}`).then(setLogoUri);
+  }, [authState.userId]);
+
+  const chooseLogo = async () => {
+    if (!authState.userId) return;
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsEditing: true, aspect: [1, 1], quality: 0.8 });
+      if (result.canceled) return;
+      const directory = new Directory(Paths.document, 'company-logos');
+      if (!directory.exists) directory.create({ intermediates: true, idempotent: true });
+      const source = new File(result.assets[0].uri);
+      const destination = new File(directory, `company-${authState.userId}${source.extension || '.jpg'}`);
+      if (destination.exists) destination.delete();
+      await source.copy(destination);
+      await SecureStore.setItemAsync(`company-logo-${authState.userId}`, destination.uri);
+      setLogoUri(destination.uri);
+    } catch (error) {
+      Alert.alert('Photo non modifiée', (error as Error).message || 'Impossible d’enregistrer le logo.');
+    }
+  };
 
   useEffect(() => {
     let active = true;
@@ -65,9 +91,10 @@ export default function ProfilEntrepriseScreen() {
 
         {/* Logo + identity */}
         <View className="-mt-10 flex-row items-end gap-md px-container-margin">
-          <View className="h-24 w-24 items-center justify-center rounded-xl bg-white p-2 shadow-lg ring-4 ring-white">
-            <MaterialIcons name="corporate-fare" size={40} color={colors.primary} />
-          </View>
+          <Pressable onPress={() => void chooseLogo()} accessibilityLabel="Modifier le logo de l’entreprise" className="relative h-24 w-24 items-center justify-center overflow-hidden rounded-xl bg-white p-2 shadow-lg">
+            {logoUri ? <Image source={{ uri: logoUri }} className="h-full w-full" resizeMode="cover" /> : <MaterialIcons name="corporate-fare" size={40} color={colors.primary} />}
+            <View className="absolute bottom-1 right-1 rounded-full bg-primary p-1"><MaterialIcons name="edit" size={12} color="#fff" /></View>
+          </Pressable>
         </View>
         <View className="mt-2 px-container-margin">
           <View className="flex-row items-center gap-1">
@@ -92,6 +119,11 @@ export default function ProfilEntrepriseScreen() {
           >
             <MaterialIcons name="settings" size={20} color={colors.primary} />
           </Pressable>
+        </View>
+
+        <View className="mx-container-margin mt-2 flex-row gap-2">
+          <Pressable onPress={() => navigation.navigate('RecruiterTabs', { screen: 'GestionDesOffres' })} className="h-11 flex-1 flex-row items-center justify-center gap-2 rounded-lg border border-outline-variant bg-surface-container-lowest"><MaterialIcons name="work-outline" size={18} color={colors.primary} /><Text className="font-sans-semibold text-label-md text-primary">Mes offres</Text></Pressable>
+          <Pressable onPress={() => navigation.navigate('CentreAssistance')} className="h-11 flex-1 flex-row items-center justify-center gap-2 rounded-lg border border-outline-variant bg-surface-container-lowest"><MaterialIcons name="support-agent" size={18} color={colors.primary} /><Text className="font-sans-semibold text-label-md text-primary">Contacter le support</Text></Pressable>
         </View>
 
 

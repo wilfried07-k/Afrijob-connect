@@ -60,7 +60,7 @@ export default function CalendrierCandidatScreen({ navigation }: Props) {
   return (
     <Screen>
       <View className="h-14 flex-row items-center justify-between px-container-margin">
-        <Pressable onPress={() => navigation.goBack()} hitSlop={8}><MaterialIcons name="arrow-back" size={24} color={colors.primary} /></Pressable>
+        <Pressable onPress={() => navigation.goBack()} hitSlop={8}><MaterialIcons style={{ transform: [{ translateY: 4 }] }} name="arrow-back" size={24} color={colors.primary} /></Pressable>
         <Text className="font-sans-bold text-headline-lg-mobile text-primary">Agenda</Text>
         <View className="w-6" />
       </View>

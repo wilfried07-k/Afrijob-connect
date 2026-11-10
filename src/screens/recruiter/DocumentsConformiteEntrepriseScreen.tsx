@@ -1,6 +1,8 @@
-import { useState } from 'react';
-import { View, Text, Pressable, FlatList, Alert } from 'react-native';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { ActivityIndicator, View, Text, Pressable, FlatList, Alert } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
+import * as DocumentPicker from 'expo-document-picker';
+import { Directory, File, Paths } from 'expo-file-system';
 import { colors } from '../../theme';
 import { useAuth } from '../../lib/auth';
 
@@ -8,7 +10,14 @@ type Props = { navigation: { goBack: () => void } };
 
 type DocStatus = 'valid' | 'expiring' | 'missing';
 
-type Doc = { id: string; name: string; status: DocStatus; expiry?: string };
+type Doc = { id: string; name: string; status: DocStatus; expiry?: string; fileUri?: string };
+
+const REQUIRED_DOCS = [
+  { id: 'rccm', name: 'Registre de Commerce (RCCM)' },
+  { id: 'niu', name: 'Attestation NIU (Contribuable)' },
+  { id: 'cnps', name: 'Attestation pour soumission CNPS' },
+  { id: 'statuts', name: 'Statuts notariés de la société' },
+];
 
 const STATUS_STYLE: Record<DocStatus, { icon: keyof typeof MaterialIcons.glyphMap; color: string; label: string }> = {
   valid: { icon: 'check-circle', color: colors.secondary, label: 'À jour' },
@@ -20,38 +29,52 @@ export default function DocumentsConformiteEntrepriseScreen({ navigation }: Prop
   const { authState } = useAuth();
   const profile = authState.profile;
   const companyName = profile?.company_name || 'Votre entreprise';
+  const companyKey = profile?.company_id ?? authState.userId ?? 'unknown';
+  const companyDirectory = useMemo(() => new Directory(Paths.document, `company-compliance-${companyKey}`), [companyKey]);
+  const [loading, setLoading] = useState(true);
 
-  const [docs, setDocs] = useState<Doc[]>([
-    { id: '1', name: 'Registre de Commerce (RCCM)', status: 'valid', expiry: 'Valide jusqu’au 12/2027' },
-    { id: '2', name: 'Attestation NIU (Contribuable)', status: 'valid', expiry: 'Valide jusqu’au 06/2027' },
-    { id: '3', name: 'Attestation pour soumission CNPS', status: 'valid', expiry: 'Valide pour le trimestre en cours' },
-    { id: '4', name: 'Statuts notariés de la société', status: 'missing' },
-  ]);
+  const [docs, setDocs] = useState<Doc[]>(REQUIRED_DOCS.map((doc) => ({ ...doc, status: 'missing' })));
 
-  const handleUpload = (docId: string, docName: string) => {
-    Alert.alert(
-      'Téléverser un document',
-      `Sélectionnez le fichier PDF ou l'image pour "${docName}".`,
-      [
-        { text: 'Annuler', style: 'cancel' },
-        {
-          text: 'Sélectionner un fichier',
-          onPress: () => {
-            setDocs((current) =>
-              current.map((d) => (d.id === docId ? { ...d, status: 'valid', expiry: 'Document soumis en cours d’examen' } : d))
-            );
-            Alert.alert('Succès', 'Document téléversé avec succès. Il sera vérifié par notre équipe de conformité.');
-          },
-        },
-      ]
-    );
+  const refreshDocuments = useCallback(() => {
+    try {
+      if (!companyDirectory.exists) companyDirectory.create({ intermediates: true, idempotent: true });
+      const storedFiles = companyDirectory.list().filter((item): item is File => item instanceof File);
+      setDocs(REQUIRED_DOCS.map((doc) => {
+        const file = storedFiles.find((item) => item.name.startsWith(`${doc.id}--`));
+        return { ...doc, status: file ? 'valid' : 'missing', expiry: file ? `Fichier sur cet appareil : ${file.name.split('--').slice(1).join('--')}` : undefined, fileUri: file?.uri };
+      }));
+    } catch (error) {
+      Alert.alert('Erreur', (error as Error).message || 'Impossible de lire les documents.');
+    } finally {
+      setLoading(false);
+    }
+  }, [companyDirectory]);
+
+  useEffect(() => { refreshDocuments(); }, [refreshDocuments]);
+
+  const handleUpload = async (doc: Doc) => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ['application/pdf', 'image/*'],
+        copyToCacheDirectory: true,
+      });
+      if (result.canceled) return;
+      const selected = result.assets[0];
+      const safeName = selected.name.replace(/[\\/:*?"<>|\u0000-\u001f]/g, '_');
+      const target = new File(companyDirectory, `${doc.id}--${Date.now()}--${safeName}`);
+      await new File(selected.uri).copy(target);
+      refreshDocuments();
+      Alert.alert('Fichier conservé sur cet appareil', 'La pièce est enregistrée localement. Elle n’a pas encore été envoyée à l’équipe de conformité.');
+    } catch (error) {
+      Alert.alert('Import impossible', (error as Error).message || 'Le fichier n’a pas pu être ajouté.');
+    }
   };
 
   return (
     <View className="flex-1 bg-background">
       <View className="h-16 flex-row items-center gap-3 px-container-margin">
         <Pressable onPress={() => navigation.goBack()} hitSlop={8}>
-          <MaterialIcons name="arrow-back" size={24} color={colors.primary} />
+          <MaterialIcons style={{ transform: [{ translateY: 4 }] }} name="arrow-back" size={24} color={colors.primary} />
         </Pressable>
         <Text className="font-sans-bold text-headline-md text-primary">Conformité Entreprise</Text>
       </View>
@@ -68,6 +91,7 @@ export default function DocumentsConformiteEntrepriseScreen({ navigation }: Prop
                 Dossier juridique et conformité réglementaire République du Cameroun.
               </Text>
             </View>
+            <Text className="font-sans text-label-md text-on-surface-variant">Les pièces jointes restent sur cet appareil et ne sont pas encore transmises au serveur.</Text>
             <Text className="mt-2 font-sans text-label-lg text-on-surface-variant">
               Maintenez ces pièces officielles à jour pour conserver votre label "Entreprise Vérifiée".
             </Text>
@@ -85,7 +109,7 @@ export default function DocumentsConformiteEntrepriseScreen({ navigation }: Prop
                 {item.expiry && <Text className="font-sans text-label-md text-on-surface-variant">{item.expiry}</Text>}
               </View>
               <Pressable
-                onPress={() => handleUpload(item.id, item.name)}
+                onPress={() => void handleUpload(item)}
                 className="items-end gap-1 rounded-lg border border-outline-variant/30 p-2"
               >
                 <View className="flex-row items-center gap-1">
@@ -94,11 +118,12 @@ export default function DocumentsConformiteEntrepriseScreen({ navigation }: Prop
                     {style.label}
                   </Text>
                 </View>
-                <Text className="text-[10px] font-sans-medium text-primary">Mettre à jour</Text>
+                <Text className="text-[10px] font-sans-medium text-primary">{item.fileUri ? 'Remplacer' : 'Choisir un fichier'}</Text>
               </Pressable>
             </View>
           );
         }}
+        ListEmptyComponent={loading ? <ActivityIndicator color={colors.primary} /> : null}
       />
     </View>
   );

@@ -17,7 +17,7 @@ export default function DashboardMarketingScreen({ navigation }: Props) {
   useEffect(() => { void refresh(); }, [refresh]);
   return (
     <Screen>
-      <View className="h-14 flex-row items-center gap-3 px-container-margin"><Pressable onPress={() => navigation.goBack()} hitSlop={8}><MaterialIcons name="arrow-back" size={24} color={colors.primary} /></Pressable><Text className="font-sans-bold text-headline-md text-primary">Marketing</Text></View>
+      <View className="h-14 flex-row items-center gap-3 px-container-margin"><Pressable onPress={() => navigation.goBack()} hitSlop={8}><MaterialIcons style={{ transform: [{ translateY: 4 }] }} name="arrow-back" size={24} color={colors.primary} /></Pressable><Text className="font-sans-bold text-headline-md text-primary">Marketing</Text></View>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: 20, gap: 20, paddingBottom: 32 }}>
         <View className="flex-row items-center justify-between"><Text className="font-sans-bold text-headline-lg text-on-surface">Données du compte</Text><Pressable onPress={refresh} hitSlop={8}><MaterialIcons name="refresh" size={22} color={colors.primary} /></Pressable></View>
         {error ? <Text className="font-sans text-body-md text-error">{error}</Text> : null}

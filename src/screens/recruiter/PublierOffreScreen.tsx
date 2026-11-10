@@ -81,7 +81,7 @@ export default function PublierOffreScreen({ navigation }: Props) {
     <Screen>
       <View className="h-16 flex-row items-center justify-between px-container-margin">
         <Pressable onPress={() => navigation.goBack()} hitSlop={8}>
-          <MaterialIcons name="arrow-back" size={24} color={colors.primary} />
+          <MaterialIcons style={{ transform: [{ translateY: 4 }] }} name="arrow-back" size={24} color={colors.primary} />
         </Pressable>
         <Text className="font-sans-bold text-title-lg text-primary">Nouvelle offre</Text>
         <View className="w-6" />

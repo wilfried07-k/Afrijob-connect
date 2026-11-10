@@ -54,7 +54,7 @@ export default function ComparaisonCandidatsScreen({ navigation }: Props) {
 
   return (
     <Screen>
-      <View className="h-16 flex-row items-center justify-between px-container-margin"><Pressable onPress={() => navigation.goBack()} hitSlop={8}><MaterialIcons name="arrow-back" size={24} color={colors.primary} /></Pressable><Text className="font-sans-bold text-headline-lg-mobile text-primary">Comparer des candidats</Text><View className="w-6" /></View>
+      <View className="h-16 flex-row items-center justify-between px-container-margin"><Pressable onPress={() => navigation.goBack()} hitSlop={8}><MaterialIcons style={{ transform: [{ translateY: 4 }] }} name="arrow-back" size={24} color={colors.primary} /></Pressable><Text className="font-sans-bold text-headline-lg-mobile text-primary">Comparer des candidats</Text><View className="w-6" /></View>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: 20, gap: 18, paddingBottom: 32 }}>
         <Text className="font-sans text-body-md text-on-surface-variant">Choisis jusqu’à deux candidats parmi les candidatures de tes offres. Les données viennent de leurs profils enregistrés.</Text>
         {loading ? <ActivityIndicator color={colors.primary} /> : loadError ? <Text className="font-sans text-body-md text-error">{loadError}</Text> : candidates.length === 0 ? <Text className="font-sans text-body-md text-on-surface-variant">Aucune candidature à comparer.</Text> : <View className="gap-2"><Text className="font-sans-semibold text-title-lg text-on-surface">Candidats disponibles</Text>{candidates.map((candidate) => {

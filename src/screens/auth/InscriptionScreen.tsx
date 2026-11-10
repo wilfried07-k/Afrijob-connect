@@ -7,8 +7,9 @@ import Screen from '../../components/ui/Screen';
 import Button from '../../components/ui/Button';
 import TextField from '../../components/ui/TextField';
 import { colors } from '../../theme';
-import { register, AccountType } from '../../lib/api';
+import { register, loginWithGoogle, AccountType } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
+import { GoogleSignin, statusCodes } from '../../lib/googleAuth';
 
 type Props = NativeStackScreenProps<AuthStackParamList, 'Inscription'>;
 
@@ -35,13 +36,45 @@ export default function InscriptionScreen({ navigation }: Props) {
 
   const canSubmit = fullName && email && phone && password && acceptedTerms;
 
+  const handleGoogleSignup = async () => {
+    if (!acceptedTerms) {
+      Alert.alert('Conditions requises', 'Acceptez les conditions d’utilisation avant de créer votre compte.');
+      return;
+    }
+    if (loading) return;
+
+    setErrorMessage('');
+    setSuccessMessage('');
+    setLoading(true);
+    try {
+      await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
+      const result = await GoogleSignin.signIn();
+      if (result.type === 'cancelled') return;
+
+      const idToken = result.data.idToken;
+      if (!idToken) throw new Error('Google n’a pas fourni de jeton d’identification.');
+
+      const response = await loginWithGoogle({ id_token: idToken, account_type: accountType, create_account: true });
+      await signIn(response.access_token, response.account_type, response.user_id);
+      const destination = response.account_type === 'recruiter' ? 'RecruiterApp' : 'CandidateApp';
+      setSuccessMessage('Bienvenue sur EmploiCamer ! Redirection vers votre espace...');
+      setTimeout(() => (navigation.getParent() as any)?.navigate(destination), 1200);
+    } catch (error) {
+      if ((error as { code?: string }).code !== statusCodes.SIGN_IN_CANCELLED) {
+        setErrorMessage((error as Error).message || 'Impossible de créer le compte avec Google.');
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <Screen>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} className="flex-1">
         {/* Header fixe : toujours visible, ne défile pas */}
         <View className="h-14 flex-row items-center justify-between px-container-margin">
           <Pressable onPress={() => navigation.navigate('Connexion')} hitSlop={8}>
-            <MaterialIcons name="arrow-back" size={24} color={colors.primary} />
+            <MaterialIcons style={{ transform: [{ translateY: 4 }] }} name="arrow-back" size={24} color={colors.primary} />
           </Pressable>
           <Text className="font-sans-semibold text-title-lg text-on-surface">Créer un compte</Text>
           <View className="w-6" />
@@ -221,6 +254,8 @@ export default function InscriptionScreen({ navigation }: Props) {
               {SOCIAL_PROVIDERS.map((provider) => (
                 <Pressable
                   key={provider.key}
+                  onPress={provider.key === 'google' ? handleGoogleSignup : undefined}
+                  disabled={loading || !!successMessage || provider.key !== 'google'}
                   className="h-12 flex-1 flex-row items-center justify-center gap-2 rounded-md border border-outline-variant bg-surface"
                 >
                   <Image

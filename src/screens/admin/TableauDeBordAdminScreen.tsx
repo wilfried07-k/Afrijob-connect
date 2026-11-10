@@ -46,11 +46,18 @@ export default function TableauDeBordAdminScreen() {
         ) : (
           <View className="gap-md">
             {CARDS.map((card) => (
-              <View key={card.key} className="flex-row items-center gap-md rounded-xl border border-outline-variant/30 bg-surface-container-lowest p-lg">
+              <Pressable key={card.key} onPress={() => {
+                if (card.key === 'users') stackNavigation?.navigate('GestionUtilisateurs');
+                else if (card.key === 'open_jobs') stackNavigation?.navigate('OffresOuvertes');
+                else if (card.key === 'pending_reports') navigation.navigate('ModerationLitiges');
+                else if (card.key === 'pending_kyc') navigation.navigate('ModerationKYC');
+                else if (card.key === 'active_bans') navigation.navigate('GestionBannissements');
+              }} className="flex-row items-center gap-md rounded-xl border border-outline-variant/30 bg-surface-container-lowest p-lg">
                 <MaterialIcons name={card.icon} size={24} color={card.color} />
                 <Text className="flex-1 font-sans text-label-lg text-on-surface-variant">{card.label}</Text>
                 <Text className="font-sans-bold text-headline-md text-on-surface">{summary?.[card.key] ?? 0}</Text>
-              </View>
+                <MaterialIcons name="chevron-right" size={20} color={colors.outlineVariant} />
+              </Pressable>
             ))}
           </View>
         )}

@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { View, Text, Pressable, ScrollView, Alert, ActivityIndicator } from 'react-native';
+import { Image, View, Text, Pressable, ScrollView, Alert, ActivityIndicator } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RecruiterStackParamList } from '../../navigation/types';
 import Screen from '../../components/ui/Screen';
@@ -56,13 +57,34 @@ export default function VerificationKycEntrepriseScreen({ navigation }: Props) {
   const profile = authState.profile;
 
   const [step, setStep] = useState<StepKey>('document');
-  const [documentCaptured, setDocumentCaptured] = useState(false);
-  const [selfieCaptured, setSelfieCaptured] = useState(false);
+  const [documentUri, setDocumentUri] = useState<string | null>(null);
+  const [selfieUri, setSelfieUri] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   const companyName = profile?.company_name || 'Entreprise Partenaire';
   const directorName = profile?.full_name || 'Directeur Général';
   const email = profile?.email || 'contact@entreprise.cm';
+
+  const captureImage = async (target: 'document' | 'selfie') => {
+    try {
+      const permission = await ImagePicker.requestCameraPermissionsAsync();
+      if (!permission.granted) {
+        Alert.alert('Accès caméra requis', 'Autorisez l’accès à la caméra dans les paramètres du téléphone pour continuer.');
+        return;
+      }
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ['images'],
+        cameraType: target === 'selfie' ? ImagePicker.CameraType.front : ImagePicker.CameraType.back,
+        allowsEditing: true,
+        quality: 0.75,
+      });
+      if (result.canceled) return;
+      if (target === 'document') setDocumentUri(result.assets[0].uri);
+      else setSelfieUri(result.assets[0].uri);
+    } catch (error) {
+      Alert.alert('Caméra indisponible', (error as Error).message || 'Impossible d’ouvrir la caméra.');
+    }
+  };
 
   const legalInfo = [
     { label: 'Raison Sociale', value: companyName },
@@ -92,9 +114,8 @@ export default function VerificationKycEntrepriseScreen({ navigation }: Props) {
         await refreshProfile();
       }
       Alert.alert(
-        'Dossier KYC transmis',
-        'Votre dossier a été soumis avec succès à l’équipe de conformité EmploiCamer. Le badge Entreprise Vérifiée sera activé sous 24-48h.',
-        [{ text: 'Compris', onPress: () => navigation.goBack() }]
+        'Informations enregistrées',
+        'Les informations de l’entreprise sont enregistrées. Les photos du document et du selfie restent sur ce téléphone et n’ont pas été transmises au serveur.'
       );
     } catch (error) {
       Alert.alert('Erreur', (error as Error).message || 'Échec de la soumission du dossier.');
@@ -107,7 +128,7 @@ export default function VerificationKycEntrepriseScreen({ navigation }: Props) {
     <Screen>
       <View className="h-14 flex-row items-center justify-between px-container-margin">
         <Pressable onPress={() => navigation.goBack()} hitSlop={8}>
-          <MaterialIcons name={step === 'document' ? 'arrow-back' : 'close'} size={24} color={colors.primary} />
+          <MaterialIcons name={step === 'document' ? 'arrow-back' : 'close'} style={step === 'document' ? { transform: [{ translateY: 4 }] } : undefined} size={24} color={colors.primary} />
         </Pressable>
         <Text className="font-sans-bold text-title-lg text-primary">Vérification KYC</Text>
         <View className="w-6" />
@@ -124,7 +145,7 @@ export default function VerificationKycEntrepriseScreen({ navigation }: Props) {
           <View className="flex-row items-center gap-2 rounded-xl border border-primary-container/20 bg-primary-container/10 p-md">
             <MaterialIcons name="verified-user" size={20} color={colors.primary} />
             <Text className="flex-1 font-sans-semibold text-label-lg text-primary">
-              Vos documents sont chiffrés et vérifiés par l'administration.
+              Les photos restent sur ce téléphone. Leur envoi à l’équipe KYC n’est pas encore configuré.
             </Text>
           </View>
           <View className="gap-2">
@@ -133,14 +154,14 @@ export default function VerificationKycEntrepriseScreen({ navigation }: Props) {
           </View>
 
           <View className="aspect-[4/3] items-center justify-center overflow-hidden rounded-2xl bg-surface-container-highest">
-            {documentCaptured ? (
-              <View className="items-center gap-2">
-                <MaterialIcons name="check-circle" size={48} color={colors.secondary} />
-                <Text className="font-sans-semibold text-title-md text-on-surface">Document enregistré</Text>
-              </View>
+            {documentUri ? (
+              <Pressable onPress={() => void captureImage('document')} className="h-full w-full items-center justify-center">
+                <Image source={{ uri: documentUri }} className="h-full w-full" resizeMode="cover" />
+                <View className="absolute bottom-3 flex-row items-center gap-2 rounded-full bg-black/70 px-4 py-2"><MaterialIcons name="refresh" size={16} color="#fff" /><Text className="font-sans-semibold text-label-md text-white">Reprendre la photo</Text></View>
+              </Pressable>
             ) : (
               <Pressable
-                onPress={() => setDocumentCaptured(true)}
+                onPress={() => void captureImage('document')}
                 className="items-center gap-2"
               >
                 <MaterialIcons name="camera-alt" size={48} color={colors.primary} />
@@ -150,10 +171,10 @@ export default function VerificationKycEntrepriseScreen({ navigation }: Props) {
           </View>
 
           <Pressable
-            disabled={!documentCaptured}
+            disabled={!documentUri}
             onPress={() => setStep('selfie')}
             className={`h-14 flex-row items-center justify-center gap-2 rounded-full bg-primary shadow-lg ${
-              !documentCaptured ? 'opacity-40' : ''
+              !documentUri ? 'opacity-40' : ''
             }`}
           >
             <Text className="font-sans-semibold text-title-lg text-on-primary">Continuer</Text>
@@ -174,14 +195,14 @@ export default function VerificationKycEntrepriseScreen({ navigation }: Props) {
           </View>
 
           <View className="aspect-square items-center justify-center overflow-hidden rounded-full bg-surface-container-highest mx-auto w-64">
-            {selfieCaptured ? (
-              <View className="items-center gap-2">
-                <MaterialIcons name="check-circle" size={48} color={colors.secondary} />
-                <Text className="font-sans-semibold text-title-md text-on-surface">Photo validée</Text>
-              </View>
+            {selfieUri ? (
+              <Pressable onPress={() => void captureImage('selfie')} className="h-full w-full items-center justify-center">
+                <Image source={{ uri: selfieUri }} className="h-full w-full" resizeMode="cover" />
+                <View className="absolute bottom-3 flex-row items-center gap-2 rounded-full bg-black/70 px-4 py-2"><MaterialIcons name="refresh" size={16} color="#fff" /><Text className="font-sans-semibold text-label-md text-white">Reprendre le selfie</Text></View>
+              </Pressable>
             ) : (
               <Pressable
-                onPress={() => setSelfieCaptured(true)}
+                onPress={() => void captureImage('selfie')}
                 className="items-center gap-2"
               >
                 <MaterialIcons name="face" size={56} color={colors.primary} />
@@ -191,10 +212,10 @@ export default function VerificationKycEntrepriseScreen({ navigation }: Props) {
           </View>
 
           <Pressable
-            disabled={!selfieCaptured}
+            disabled={!selfieUri}
             onPress={() => setStep('review')}
             className={`h-14 flex-row items-center justify-center gap-2 rounded-full bg-primary shadow-lg ${
-              !selfieCaptured ? 'opacity-40' : ''
+              !selfieUri ? 'opacity-40' : ''
             }`}
           >
             <Text className="font-sans-semibold text-title-lg text-on-primary">Passer à la révision</Text>
@@ -230,7 +251,7 @@ export default function VerificationKycEntrepriseScreen({ navigation }: Props) {
             ) : (
               <>
                 <MaterialIcons name="send" size={18} color="#ffffff" />
-                <Text className="font-sans-semibold text-title-lg text-on-primary">Soumettre pour vérification</Text>
+                <Text className="font-sans-semibold text-title-lg text-on-primary">Enregistrer les informations entreprise</Text>
               </>
             )}
           </Pressable>

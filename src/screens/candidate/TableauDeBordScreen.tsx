@@ -8,21 +8,23 @@ import { colors } from '../../theme';
 import { CandidateStackParamList } from '../../navigation/types';
 import { useAuth } from '../../lib/auth';
 import { getJobs, type JobOffer } from '../../lib/api';
+import { useLanguage } from '../../theme/language';
 
 type Category = {
   key: string;
   label: string;
+  keyword: string;
   icon: keyof typeof MaterialIcons.glyphMap;
   bg: string;
   color: string;
 };
 
 const CATEGORIES: Category[] = [
-  { key: 'tech', label: 'Tech', icon: 'terminal', bg: 'bg-primary/10', color: colors.primary },
-  { key: 'sante', label: 'Santé', icon: 'medical-services', bg: 'bg-secondary-container/30', color: colors.secondary },
-  { key: 'finance', label: 'Finance', icon: 'account-balance', bg: 'bg-tertiary-fixed/30', color: colors.tertiary },
-  { key: 'btp', label: 'BTP', icon: 'construction', bg: 'bg-surface-container-highest', color: colors.onSurfaceVariant },
-  { key: 'artisanat', label: 'Artisanat', icon: 'brush', bg: 'bg-tertiary-fixed/30', color: colors.tertiary },
+  { key: 'tech', label: 'Tech', keyword: 'tech', icon: 'terminal', bg: 'bg-primary/10', color: colors.primary },
+  { key: 'sante', label: 'Santé', keyword: 'santé', icon: 'medical-services', bg: 'bg-secondary-container/30', color: colors.secondary },
+  { key: 'finance', label: 'Finance', keyword: 'finance', icon: 'account-balance', bg: 'bg-tertiary-fixed/30', color: colors.tertiary },
+  { key: 'btp', label: 'BTP', keyword: 'btp', icon: 'construction', bg: 'bg-surface-container-highest', color: colors.onSurfaceVariant },
+  { key: 'artisanat', label: 'Artisanat', keyword: 'artisanat', icon: 'brush', bg: 'bg-tertiary-fixed/30', color: colors.tertiary },
 ];
 
 
@@ -31,6 +33,7 @@ const CATEGORIES: Category[] = [
 export default function TableauDeBordScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<CandidateStackParamList>>();
   const { authState } = useAuth();
+  const { t, language } = useLanguage();
   const [jobs, setJobs] = useState<JobOffer[]>([]);
   const [loadingJobs, setLoadingJobs] = useState(true);
 
@@ -68,7 +71,7 @@ export default function TableauDeBordScreen() {
               <Text className="font-sans-bold text-label-lg text-primary">SN</Text>
             </View>
             <View>
-              <Text className="font-sans text-label-md text-on-surface-variant">Bonjour,</Text>
+              <Text className="font-sans text-label-md text-on-surface-variant">{t('Bonjour,')}</Text>
                   <Text className="font-sans-bold text-headline-md text-primary">{greetingName}</Text>
             </View>
           </View>
@@ -90,7 +93,7 @@ export default function TableauDeBordScreen() {
           <View className="flex-row items-center rounded-lg bg-surface-container-low px-md">
             <MaterialIcons name="search" size={20} color={colors.outline} />
             <TextInput
-              placeholder="Recherche intelligente (ex: Développeur, Comptable)"
+              placeholder={t('Recherche intelligente (ex: Développeur, Comptable)')}
               placeholderTextColor={colors.outline}
               className="ml-2 flex-1 py-4 font-sans text-body-md text-on-surface"
             />
@@ -103,17 +106,19 @@ export default function TableauDeBordScreen() {
         {/* Categories */}
         <View className="mb-lg">
           <View className="mb-md flex-row items-center justify-between px-container-margin">
-            <Text className="font-sans-semibold text-title-lg text-on-surface">Catégories</Text>
-            <Text className="font-sans-semibold text-label-lg text-primary">Voir tout</Text>
+            <Text className="font-sans-semibold text-title-lg text-on-surface">{t('Catégories')}</Text>
+            <Pressable onPress={() => navigation.navigate('CandidateTabs', { screen: 'RechercheAvancee', params: { showAll: true } })}>
+              <Text className="font-sans-semibold text-label-lg text-primary">Voir tout</Text>
+            </Pressable>
           </View>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 20, gap: 16 }}>
             {CATEGORIES.map((cat) => (
-              <View key={cat.key} className="items-center gap-2">
+              <Pressable key={cat.key} onPress={() => navigation.navigate('CandidateTabs', { screen: 'RechercheAvancee', params: { keyword: cat.keyword } })} className="items-center gap-2">
                 <View className={`h-16 w-16 items-center justify-center rounded-lg ${cat.bg}`}>
                   <MaterialIcons name={cat.icon} size={28} color={cat.color} />
                 </View>
-                <Text className="font-sans text-label-md text-on-surface-variant">{cat.label}</Text>
-              </View>
+                <Text className="font-sans text-label-md text-on-surface-variant">{t(cat.label)}</Text>
+              </Pressable>
             ))}
           </ScrollView>
         </View>
@@ -121,7 +126,7 @@ export default function TableauDeBordScreen() {
         {/* Recommended jobs */}
         <View className="mb-lg">
           <View className="mb-md px-container-margin">
-            <Text className="font-sans-semibold text-title-lg text-on-surface">Offres recommandées</Text>
+            <Text className="font-sans-semibold text-title-lg text-on-surface">{t('Offres recommandées')}</Text>
           </View>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 20, gap: 16 }}>
             {loadingJobs ? (
@@ -174,7 +179,7 @@ export default function TableauDeBordScreen() {
           <View className="flex-row items-center gap-md rounded-lg bg-surface-container-high p-md">
             <View className="flex-1">
               <Text className="mb-1 font-sans-semibold text-label-lg uppercase tracking-wider text-on-surface-variant">
-                Entreprises vérifiées
+                {t('Entreprises vérifiées')}
               </Text>
               <View className="flex-row">
                 {[1, 2, 3].map((i) => (
@@ -190,15 +195,15 @@ export default function TableauDeBordScreen() {
                 </View>
               </View>
             </View>
-            <Pressable className="rounded-md bg-white px-4 py-2 shadow-sm">
-              <Text className="font-sans-semibold text-label-lg text-primary">Découvrir</Text>
+            <Pressable onPress={() => navigation.navigate('CandidateTabs', { screen: 'RechercheAvancee', params: { verifiedOnly: true, showAll: true } })} className="rounded-md bg-white px-4 py-2 shadow-sm">
+              <Text className="font-sans-semibold text-label-lg text-primary">{t('Découvrir')}</Text>
             </Pressable>
           </View>
         </View>
 
         {/* Recent jobs */}
         <View className="px-container-margin">
-          <Text className="mb-md font-sans-semibold text-title-lg text-on-surface">Offres récentes</Text>
+          <Text className="mb-md font-sans-semibold text-title-lg text-on-surface">{t('Offres récentes')}</Text>
           <View className="gap-md">
             {recentJobs.map((job) => (
               <Pressable
@@ -220,7 +225,7 @@ export default function TableauDeBordScreen() {
                     {job.salary_min ? `${job.salary_min} - ${job.salary_max ?? job.salary_min} CFA` : 'À négocier'}
                   </Text>
                   <Text className="text-[10px] font-sans text-outline">
-                    {new Date(job.created_at).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' })}
+                    {new Date(job.created_at).toLocaleDateString(language === 'en' ? 'en-US' : 'fr-FR', { day: '2-digit', month: 'short' })}
                   </Text>
                 </View>
               </Pressable>

@@ -22,7 +22,7 @@ export default function TableauDeBordConformiteScreen({ navigation }: Props) {
   const compliance = summary?.companies ? Math.round((summary.verified_companies / summary.companies) * 100) : 0;
   return (
     <Screen>
-      <View className="h-14 flex-row items-center gap-3 px-container-margin"><Pressable onPress={() => navigation.goBack()} hitSlop={8}><MaterialIcons name="arrow-back" size={24} color={colors.primary} /></Pressable><View className="flex-row items-center gap-2"><MaterialIcons name="shield" size={20} color={colors.primary} /><Text className="font-sans-bold text-headline-md text-primary">Conformité</Text></View></View>
+      <View className="h-14 flex-row items-center gap-3 px-container-margin"><Pressable onPress={() => navigation.goBack()} hitSlop={8}><MaterialIcons style={{ transform: [{ translateY: 4 }] }} name="arrow-back" size={24} color={colors.primary} /></Pressable><View className="flex-row items-center gap-2"><MaterialIcons name="shield" size={20} color={colors.primary} /><Text className="font-sans-bold text-headline-md text-primary">Conformité</Text></View></View>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: 20, gap: 20, paddingBottom: 32 }}>
         {error ? <Text className="font-sans text-body-md text-error">{error}</Text> : null}
         {loading && !summary ? <ActivityIndicator color={colors.primary} /> : summary ? <View className="flex-row flex-wrap gap-2">{[

@@ -47,7 +47,7 @@ export default function NotesEntretienScreen({ navigation, route }: Props) {
   return (
     <Screen>
       <View className="h-14 flex-row items-center gap-3 px-container-margin">
-        <Pressable onPress={() => navigation.goBack()} hitSlop={8}><MaterialIcons name="arrow-back" size={24} color={colors.primary} /></Pressable>
+        <Pressable onPress={() => navigation.goBack()} hitSlop={8}><MaterialIcons style={{ transform: [{ translateY: 4 }] }} name="arrow-back" size={24} color={colors.primary} /></Pressable>
         <Text className="font-sans-bold text-headline-md text-primary">Notes d’entretien</Text>
       </View>
       <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 20, gap: 16, paddingBottom: 32 }}>

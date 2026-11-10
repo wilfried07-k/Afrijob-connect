@@ -63,7 +63,7 @@ export default function DetailOffreScreen({ navigation, route }: Props) {
 
   return (
     <Screen>
-      <View className="h-16 flex-row items-center justify-between px-container-margin"><Pressable onPress={() => navigation.goBack()} hitSlop={8}><MaterialIcons name="arrow-back" size={24} color={colors.primary} /></Pressable><Text className="font-sans-bold text-headline-lg-mobile text-primary">Détail de l’offre</Text><View className="w-6" /></View>
+      <View className="h-16 flex-row items-center justify-between px-container-margin"><Pressable onPress={() => navigation.goBack()} hitSlop={8}><MaterialIcons style={{ transform: [{ translateY: 4 }] }} name="arrow-back" size={24} color={colors.primary} /></Pressable><Text className="font-sans-bold text-headline-lg-mobile text-primary">Détail de l’offre</Text><View className="w-6" /></View>
       {loading ? <View className="flex-1 items-center justify-center"><ActivityIndicator color={colors.primary} /></View> : loadError ? <Text className="px-container-margin py-xl font-sans text-body-md text-error">{loadError}</Text> : job ? <>
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: 20, paddingBottom: 24, gap: 16 }}>
           <View className="rounded-lg border border-outline-variant/30 bg-surface-container-lowest p-lg shadow-sm">

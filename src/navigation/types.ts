@@ -15,6 +15,7 @@ export type OnboardingStackParamList = {
 
 export type AuthStackParamList = {
   Connexion: undefined;
+  MotDePasseOublie: { email?: string } | undefined;
   Inscription: undefined;
   VerificationOtp: { email?: string; phone?: string } | undefined;
   ChoixTypeCompte: undefined;
@@ -22,7 +23,7 @@ export type AuthStackParamList = {
 
 export type CandidateTabParamList = {
   TableauDeBord: undefined;
-  RechercheAvancee: undefined;
+  RechercheAvancee: { keyword?: string; verifiedOnly?: boolean; showAll?: boolean } | undefined;
   Messages: undefined;
   Favoris: undefined;
   Profil: undefined;
@@ -134,6 +135,8 @@ export type AdminTabParamList = {
 
 export type AdminStackParamList = {
   AdminTabs: undefined;
+  GestionUtilisateurs: undefined;
+  OffresOuvertes: undefined;
   DashboardPaiements: undefined;
   GestionRemboursements: undefined;
   JournalAudit: undefined;

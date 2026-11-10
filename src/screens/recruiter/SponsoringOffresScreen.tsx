@@ -18,7 +18,7 @@ export default function SponsoringOffresScreen({ navigation }: Props) {
     <View className="flex-1 bg-background">
       <View className="h-16 flex-row items-center gap-3 px-container-margin">
         <Pressable onPress={() => navigation.goBack()} hitSlop={8}>
-          <MaterialIcons name="arrow-back" size={24} color={colors.primary} />
+          <MaterialIcons style={{ transform: [{ translateY: 4 }] }} name="arrow-back" size={24} color={colors.primary} />
         </Pressable>
         <Text className="font-sans-bold text-headline-md text-primary">Sponsoriser une offre</Text>
       </View>

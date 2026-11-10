@@ -47,7 +47,7 @@ export default function VerificationOtpScreen({ navigation, route }: Props) {
       {/* Header */}
       <View className="h-16 flex-row items-center px-container-margin">
         <Pressable onPress={() => navigation.goBack()} hitSlop={8}>
-          <MaterialIcons name="arrow-back" size={24} color={colors.onSurfaceVariant} />
+          <MaterialIcons style={{ transform: [{ translateY: 4 }] }} name="arrow-back" size={24} color={colors.onSurfaceVariant} />
         </Pressable>
         <Text className="flex-1 pr-12 text-center font-sans-bold text-headline-lg-mobile text-on-surface">
           Vérification

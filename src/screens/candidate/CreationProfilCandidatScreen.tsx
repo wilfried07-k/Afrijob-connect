@@ -1,6 +1,7 @@
-import { useState } from 'react';
-import { Alert, View, Text, TextInput, Pressable, ScrollView } from 'react-native';
+import { useEffect, useState } from 'react';
+import { Alert, Image, View, Text, TextInput, Pressable, ScrollView } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { CandidateStackParamList } from '../../navigation/types';
 import Screen from '../../components/ui/Screen';
@@ -8,16 +9,39 @@ import Button from '../../components/ui/Button';
 import { colors } from '../../theme';
 import { useAuth } from '../../lib/auth';
 import { upsertCandidateProfile } from '../../lib/api';
+import { getCandidatePhoto, saveCandidatePhoto } from '../../lib/candidateFiles';
 
 type Props = NativeStackScreenProps<CandidateStackParamList, 'CreationProfilCandidat'>;
 
 export default function CreationProfilCandidatScreen({ navigation }: Props) {
   const { authState, refreshProfile } = useAuth();
+  const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [fullName, setFullName] = useState(authState.profile?.full_name ?? '');
   const [jobTitle, setJobTitle] = useState(authState.profile?.job_title ?? '');
   const [city, setCity] = useState(authState.profile?.city ?? '');
   const [summary, setSummary] = useState(authState.profile?.summary ?? '');
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (authState.userId) void getCandidatePhoto(authState.userId).then(setPhotoUri);
+  }, [authState.userId]);
+
+  const choosePhoto = async () => {
+    if (!authState.userId) return;
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+      if (result.canceled) return;
+      const savedUri = await saveCandidatePhoto(authState.userId, result.assets[0].uri);
+      setPhotoUri(savedUri);
+    } catch (error) {
+      Alert.alert('Photo non modifiée', (error as Error).message || 'Impossible d’enregistrer cette photo.');
+    }
+  };
   const completion = Math.round(
     [fullName, jobTitle, city, summary].filter((value) => value.trim().length > 0).length * 25,
   );
@@ -51,7 +75,7 @@ export default function CreationProfilCandidatScreen({ navigation }: Props) {
     <Screen>
       <View className="h-14 flex-row items-center justify-between px-container-margin">
         <Pressable onPress={() => navigation.goBack()} hitSlop={8}>
-          <MaterialIcons name="arrow-back" size={24} color={colors.primary} />
+          <MaterialIcons style={{ transform: [{ translateY: 4 }] }} name="arrow-back" size={24} color={colors.primary} />
         </Pressable>
         <Text className="font-sans-bold text-headline-lg-mobile text-primary">Mon Profil</Text>
         <View className="items-center">
@@ -65,10 +89,10 @@ export default function CreationProfilCandidatScreen({ navigation }: Props) {
         {/* Avatar */}
         <View className="items-center gap-md">
           <View className="relative">
-            <View className="h-32 w-32 items-center justify-center rounded-2xl bg-surface-container-low shadow-lg ring-4 ring-white">
-              <Text className="font-sans-bold text-display-lg text-primary">{fullName.trim().slice(0, 2).toUpperCase() || '?'}</Text>
-            </View>
-            <Pressable className="absolute -bottom-2 -right-2 rounded-xl bg-primary p-2.5 shadow-lg">
+            <Pressable onPress={() => void choosePhoto()} className="h-32 w-32 items-center justify-center overflow-hidden rounded-full bg-surface-container-low shadow-lg">
+              {photoUri ? <Image source={{ uri: photoUri }} className="h-full w-full" resizeMode="cover" /> : <Text className="font-sans-bold text-display-lg text-primary">{fullName.trim().slice(0, 2).toUpperCase() || '?'}</Text>}
+            </Pressable>
+            <Pressable onPress={() => void choosePhoto()} className="absolute bottom-0 right-0 rounded-full bg-primary p-2.5 shadow-lg">
               <MaterialIcons name="edit" size={16} color="#ffffff" />
             </Pressable>
           </View>

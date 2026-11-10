@@ -14,7 +14,7 @@ export default function FacturationAbonnementScreen({ navigation }: Props) {
   useEffect(() => { let active = true; Promise.all([getMyBillingSubscription(), listMyBillingPayments()]).then(([plan, items]) => { if (active) { setSubscription(plan); setPayments(items.slice(0, 3)); } }).catch((err: unknown) => { if (active) setError(err instanceof Error ? err.message : 'Impossible de charger la facturation.'); }).finally(() => { if (active) setLoading(false); }); return () => { active = false; }; }, []);
   return (
     <View className="flex-1 bg-background">
-      <View className="h-16 flex-row items-center gap-3 px-container-margin"><Pressable onPress={() => navigation.goBack()} hitSlop={8}><MaterialIcons name="arrow-back" size={24} color={colors.primary} /></Pressable><Text className="font-sans-bold text-headline-md text-primary">Facturation</Text></View>
+      <View className="h-16 flex-row items-center gap-3 px-container-margin"><Pressable onPress={() => navigation.goBack()} hitSlop={8}><MaterialIcons style={{ transform: [{ translateY: 4 }] }} name="arrow-back" size={24} color={colors.primary} /></Pressable><Text className="font-sans-bold text-headline-md text-primary">Facturation</Text></View>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: 20, gap: 20, paddingBottom: 32 }}>
         <View className="gap-md rounded-2xl border border-outline-variant/30 bg-surface-container-lowest p-lg shadow-sm">
           <Text className="font-sans text-label-lg text-on-surface-variant">Abonnement de l’entreprise</Text>

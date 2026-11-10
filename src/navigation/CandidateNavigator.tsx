@@ -7,6 +7,7 @@ import RechercheAvanceeScreen from '../screens/candidate/RechercheAvanceeScreen'
 import MessagesScreen from '../screens/candidate/MessagesScreen';
 import FavorisScreen from '../screens/candidate/FavorisScreen';
 import ProfilScreen from '../screens/candidate/ProfilScreen';
+import { useLanguage } from '../theme/language';
 
 const Tab = createBottomTabNavigator<CandidateTabParamList>();
 
@@ -19,6 +20,7 @@ const ICONS: Record<keyof CandidateTabParamList, keyof typeof MaterialIcons.glyp
 };
 
 export default function CandidateNavigator() {
+  const { t } = useLanguage();
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
@@ -30,11 +32,11 @@ export default function CandidateNavigator() {
         ),
       })}
     >
-      <Tab.Screen name="TableauDeBord" component={TableauDeBordScreen} options={{ title: 'Accueil' }} />
-      <Tab.Screen name="RechercheAvancee" component={RechercheAvanceeScreen} options={{ title: 'Recherche' }} />
-      <Tab.Screen name="Messages" component={MessagesScreen} options={{ title: 'Messages' }} />
-      <Tab.Screen name="Favoris" component={FavorisScreen} options={{ title: 'Favoris' }} />
-      <Tab.Screen name="Profil" component={ProfilScreen} options={{ title: 'Profil' }} />
+      <Tab.Screen name="TableauDeBord" component={TableauDeBordScreen} options={{ title: t('Accueil') }} />
+      <Tab.Screen name="RechercheAvancee" component={RechercheAvanceeScreen} options={{ title: t('Recherche') }} />
+      <Tab.Screen name="Messages" component={MessagesScreen} options={{ title: t('Messages') }} />
+      <Tab.Screen name="Favoris" component={FavorisScreen} options={{ title: t('Favoris') }} />
+      <Tab.Screen name="Profil" component={ProfilScreen} options={{ title: t('Profil') }} />
     </Tab.Navigator>
   );
 }

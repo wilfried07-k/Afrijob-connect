@@ -7,8 +7,9 @@ import Screen from '../../components/ui/Screen';
 import Button from '../../components/ui/Button';
 import TextField from '../../components/ui/TextField';
 import { colors } from '../../theme';
-import { login, LoginAccountType } from '../../lib/api';
+import { login, loginWithGoogle, TokenResponse } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
+import { GoogleSignin, statusCodes } from '../../lib/googleAuth';
 
 type Props = NativeStackScreenProps<AuthStackParamList, 'Connexion'>;
 
@@ -22,12 +23,25 @@ const SOCIAL_PROVIDERS = [
 ] as const;
 
 export default function ConnexionScreen({ navigation }: Props) {
-  const [accountType, setAccountType] = useState<LoginAccountType>('candidate');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
 
   const { signIn } = useAuth();
+
+  const completeLogin = async (response: TokenResponse) => {
+    await signIn(response.access_token, response.account_type, response.user_id);
+
+    if (response.account_type === 'candidate') {
+      (navigation.getParent() as any)?.navigate('CandidateApp');
+    } else if (response.account_type === 'recruiter') {
+      (navigation.getParent() as any)?.navigate('RecruiterApp');
+    } else if (response.account_type === 'admin') {
+      (navigation.getParent() as any)?.navigate('AdminApp');
+    } else {
+      Alert.alert('Type de compte invalide', 'Impossible de déterminer la destination après connexion.');
+    }
+  };
 
   const handleLogin = async () => {
     setLoading(true);
@@ -35,22 +49,35 @@ export default function ConnexionScreen({ navigation }: Props) {
       const response = await login({
         email,
         password,
-        account_type: accountType,
       });
-
-      await signIn(response.access_token, response.account_type, response.user_id);
-
-      if (response.account_type === 'candidate') {
-        (navigation.getParent() as any)?.navigate('CandidateApp');
-      } else if (response.account_type === 'recruiter') {
-        (navigation.getParent() as any)?.navigate('RecruiterApp');
-      } else if (response.account_type === 'admin') {
-        (navigation.getParent() as any)?.navigate('AdminApp');
-      } else {
-        Alert.alert('Type de compte invalide', 'Impossible de déterminer la destination après connexion.');
-      }
+      await completeLogin(response);
     } catch (error) {
       Alert.alert('Erreur de connexion', (error as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGoogleLogin = async () => {
+    setLoading(true);
+    try {
+      await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
+      const result = await GoogleSignin.signIn();
+      if (result.type === 'cancelled') {
+        return;
+      }
+
+      const idToken = result.data.idToken;
+      if (!idToken) {
+        throw new Error('Google n’a pas fourni de jeton d’identification.');
+      }
+
+      const response = await loginWithGoogle({ id_token: idToken });
+      await completeLogin(response);
+    } catch (error) {
+      if ((error as { code?: string }).code !== statusCodes.SIGN_IN_CANCELLED) {
+        Alert.alert('Connexion Google impossible', (error as Error).message);
+      }
     } finally {
       setLoading(false);
     }
@@ -80,36 +107,6 @@ export default function ConnexionScreen({ navigation }: Props) {
             </Text>
           </View>
 
-          {/* Account type selector */}
-          <View className="mb-lg flex-row gap-2 rounded-xl border border-outline-variant/30 bg-surface-container-lowest p-1.5 shadow-sm">
-            {(['candidate', 'recruiter', 'admin'] as LoginAccountType[]).map((type) => {
-              const active = type === accountType;
-              const label = type === 'candidate' ? 'Candidat' : type === 'recruiter' ? 'Recruteur' : 'Admin';
-              return (
-                <Pressable
-                  key={type}
-                  onPress={() => setAccountType(type)}
-                  className={`flex-1 flex-row items-center justify-center gap-2 rounded-lg py-3 ${
-                    active ? 'bg-primary-container' : ''
-                  }`}
-                >
-                  <MaterialIcons
-                    name={type === 'candidate' ? 'work' : type === 'recruiter' ? 'business' : 'security'}
-                    size={18}
-                    color={active ? colors.onPrimaryContainer : colors.onSurfaceVariant}
-                  />
-                  <Text
-                    className={`font-sans-semibold text-label-lg ${
-                      active ? 'text-on-primary-container' : 'text-on-surface-variant'
-                    }`}
-                  >
-                    {label}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
-
           {/* Form Card */}
           <View className="gap-lg rounded-lg border border-outline-variant/30 bg-surface-container-lowest p-lg shadow-lg">
             <View className="gap-md">
@@ -128,7 +125,7 @@ export default function ConnexionScreen({ navigation }: Props) {
                   <Text className="font-sans-semibold text-label-lg text-on-surface-variant">
                     Mot de passe
                   </Text>
-                  <Pressable>
+                  <Pressable onPress={() => navigation.navigate('MotDePasseOublie', { email })}>
                     <Text className="font-sans-medium text-label-md text-primary">
                       Mot de passe oublié ?
                     </Text>
@@ -165,6 +162,8 @@ export default function ConnexionScreen({ navigation }: Props) {
               {SOCIAL_PROVIDERS.map((provider) => (
                 <Pressable
                   key={provider.key}
+                  onPress={provider.key === 'google' ? handleGoogleLogin : undefined}
+                  disabled={loading || provider.key !== 'google'}
                   className="h-14 flex-1 items-center justify-center rounded-lg border border-outline-variant/30 bg-surface-container-low"
                 >
                   <Image

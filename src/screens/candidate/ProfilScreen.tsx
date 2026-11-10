@@ -1,5 +1,5 @@
 ﻿import { useCallback, useState } from 'react';
-import { ActivityIndicator, View, Text, Pressable, ScrollView } from 'react-native';
+import { ActivityIndicator, Image, View, Text, Pressable, ScrollView } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -9,6 +9,8 @@ import { colors } from '../../theme';
 import { CandidateStackParamList } from '../../navigation/types';
 import { useAuth } from '../../lib/auth';
 import { listCandidateApplications, listFavorites } from '../../lib/api';
+import { getCandidatePhoto } from '../../lib/candidateFiles';
+import { useLanguage } from '../../theme/language';
 
 type MenuItem = {
   icon: keyof typeof MaterialIcons.glyphMap;
@@ -70,6 +72,8 @@ const MENU_GROUPS: MenuGroup[] = [
 export default function ProfilScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<CandidateStackParamList>>();
   const { authState, signOut } = useAuth();
+  const { t } = useLanguage();
+  const [photoUri, setPhotoUri] = useState<string | null>(null);
   const candidateId = authState.profile?.candidate_profile_id;
   const [applicationCount, setApplicationCount] = useState(0);
   const [favoriteCount, setFavoriteCount] = useState(0);
@@ -88,6 +92,13 @@ export default function ProfilScreen() {
     void load();
     return () => { active = false; };
   }, [candidateId]));
+  useFocusEffect(useCallback(() => {
+    let active = true;
+    if (authState.userId) {
+      void getCandidatePhoto(authState.userId).then((uri) => { if (active) setPhotoUri(uri); });
+    }
+    return () => { active = false; };
+  }, [authState.userId]));
   const fullName = authState.profile?.full_name || 'Mon profil';
   const initials = fullName.split(' ').map((part) => part[0]).join('').slice(0, 2).toUpperCase();
   const stats = [{ label: 'Candidatures', value: String(applicationCount) }, { label: 'Favoris', value: String(favoriteCount) }];
@@ -101,8 +112,8 @@ export default function ProfilScreen() {
           className="items-center gap-md px-container-margin pb-lg pt-lg"
         >
           <View className="relative">
-            <View className="h-24 w-24 items-center justify-center rounded-full border-4 border-primary-fixed bg-surface-container-low">
-              <Text className="font-sans-bold text-headline-lg text-primary">{initials}</Text>
+            <View className="h-24 w-24 items-center justify-center overflow-hidden rounded-full border-4 border-primary-fixed bg-surface-container-low">
+              {photoUri ? <Image source={{ uri: photoUri }} className="h-full w-full" resizeMode="cover" /> : <Text className="font-sans-bold text-headline-lg text-primary">{initials}</Text>}
             </View>
             <View className="absolute bottom-0 right-0 h-8 w-8 items-center justify-center rounded-full border-2 border-white bg-primary">
               <MaterialIcons name="edit" size={16} color="#ffffff" />
@@ -117,7 +128,7 @@ export default function ProfilScreen() {
             </View>
             <View className="mt-2 flex-row items-center gap-1">
               <MaterialIcons name="visibility" size={14} color={colors.primary} />
-              <Text className="font-sans-semibold text-label-md text-primary">Voir mon profil public</Text>
+              <Text className="font-sans-semibold text-label-md text-primary">{t('Voir mon profil public')}</Text>
             </View>
           </View>
         </Pressable>
@@ -129,11 +140,11 @@ export default function ProfilScreen() {
             className="h-12 flex-1 flex-row items-center justify-center gap-2 rounded-md bg-primary-container"
           >
             <MaterialIcons name="edit" size={18} color={colors.onPrimaryContainer} />
-            <Text className="font-sans-semibold text-label-lg text-on-primary-container">Modifier</Text>
+            <Text className="font-sans-semibold text-label-lg text-on-primary-container">{t('Modifier')}</Text>
           </Pressable>
           <Pressable onPress={() => navigation.navigate('CoffreFortDocuments')} className="h-12 flex-1 flex-row items-center justify-center gap-2 rounded-md bg-surface-container-high">
             <MaterialIcons name="folder" size={18} color={colors.primary} />
-            <Text className="font-sans-semibold text-label-lg text-primary">Gérer mes documents</Text>
+            <Text className="font-sans-semibold text-label-lg text-primary">{t('Gérer mes documents')}</Text>
           </Pressable>
         </View>
 
@@ -152,7 +163,7 @@ export default function ProfilScreen() {
           {MENU_GROUPS.map((group) => (
             <View key={group.title} className="gap-sm">
               <Text className="px-1 font-sans-semibold text-label-lg uppercase tracking-wider text-primary">
-                {group.title}
+                {t(group.title)}
               </Text>
               <View className="overflow-hidden rounded-lg border border-outline-variant/20 bg-surface-container-lowest shadow-sm">
                 {group.items.map((item, index) => (
@@ -228,7 +239,7 @@ export default function ProfilScreen() {
                       }}
                     >
                       <MaterialIcons name={item.icon} size={20} color={colors.onSurfaceVariant} />
-                      <Text className="ml-md flex-1 font-sans text-body-lg text-on-surface">{item.label}</Text>
+                      <Text className="ml-md flex-1 font-sans text-body-lg text-on-surface">{t(item.label)}</Text>
                       <MaterialIcons name="chevron-right" size={20} color={colors.outlineVariant} />
                     </Pressable>
                     {index < group.items.length - 1 && (

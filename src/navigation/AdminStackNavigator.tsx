@@ -26,6 +26,8 @@ import GestionRemisesScreen from '../screens/admin/GestionRemisesScreen';
 import RapportMarketingTrimestrielScreen from '../screens/admin/RapportMarketingTrimestrielScreen';
 import ExportationRapportScreen from '../screens/shared/ExportationRapportScreen';
 import TableauDeBordCNPSScreen from '../screens/admin/TableauDeBordCNPSScreen';
+import GestionUtilisateursScreen from '../screens/admin/GestionUtilisateursScreen';
+import OffresOuvertesScreen from '../screens/admin/OffresOuvertesScreen';
 
 const Stack = createNativeStackNavigator<AdminStackParamList>();
 
@@ -37,6 +39,8 @@ export default function AdminStackNavigator() {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="AdminTabs" component={AdminTabNavigator} />
+      <Stack.Screen name="GestionUtilisateurs" component={GestionUtilisateursScreen} />
+      <Stack.Screen name="OffresOuvertes" component={OffresOuvertesScreen} />
       <Stack.Screen name="DashboardPaiements" component={DashboardPaiementsScreen} />
       <Stack.Screen name="GestionRemboursements" component={GestionRemboursementsScreen} />
       <Stack.Screen name="JournalAudit" component={JournalAuditScreen} />

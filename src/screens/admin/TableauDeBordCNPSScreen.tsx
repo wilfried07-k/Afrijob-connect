@@ -13,7 +13,7 @@ export default function TableauDeBordCNPSScreen({ navigation }: Props) {
   const compliance = summary?.companies_total ? Math.round((summary.companies_verified / summary.companies_total) * 100) : 0;
   return (
     <View className="flex-1 bg-background">
-      <View className="h-16 flex-row items-center gap-3 px-container-margin"><Pressable onPress={() => navigation.goBack()} hitSlop={8}><MaterialIcons name="arrow-back" size={24} color={colors.primary} /></Pressable><View className="flex-row items-center gap-2"><MaterialIcons name="account-balance" size={20} color={colors.primary} /><Text className="font-sans-bold text-headline-md text-primary">DIPE & conformité</Text></View></View>
+      <View className="h-16 flex-row items-center gap-3 px-container-margin"><Pressable onPress={() => navigation.goBack()} hitSlop={8}><MaterialIcons style={{ transform: [{ translateY: 4 }] }} name="arrow-back" size={24} color={colors.primary} /></Pressable><View className="flex-row items-center gap-2"><MaterialIcons name="account-balance" size={20} color={colors.primary} /><Text className="font-sans-bold text-headline-md text-primary">DIPE & conformité</Text></View></View>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: 20, gap: 20, paddingBottom: 32 }}>
         <Text className="font-sans text-body-md text-on-surface-variant">Indicateurs calculés à partir des déclarations conservées dans l’application. Ils ne représentent pas des transmissions ni des paiements confirmés par la CNPS.</Text>
         {error ? <Text className="font-sans text-body-md text-error">{error}</Text> : null}

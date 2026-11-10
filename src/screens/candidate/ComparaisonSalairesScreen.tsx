@@ -45,7 +45,7 @@ export default function ComparaisonSalairesScreen({ navigation }: Props) {
 
   return (
     <Screen>
-      <View className="h-14 flex-row items-center gap-3 px-container-margin"><Pressable onPress={() => navigation.goBack()} hitSlop={8}><MaterialIcons name="arrow-back" size={24} color={colors.primary} /></Pressable><Text className="font-sans-bold text-headline-md text-primary">Comparer les salaires</Text></View>
+      <View className="h-14 flex-row items-center gap-3 px-container-margin"><Pressable onPress={() => navigation.goBack()} hitSlop={8}><MaterialIcons style={{ transform: [{ translateY: 4 }] }} name="arrow-back" size={24} color={colors.primary} /></Pressable><Text className="font-sans-bold text-headline-md text-primary">Comparer les salaires</Text></View>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: 20, gap: 20, paddingBottom: 32 }}>
         <View className="gap-md rounded-xl border border-outline-variant/30 bg-surface-container-lowest p-lg shadow-sm">
           <View className="gap-1"><Text className="font-sans-medium text-label-lg text-on-surface-variant">Intitulé du poste</Text><View className="h-12 flex-row items-center rounded-xl border border-outline-variant bg-surface px-md"><MaterialIcons name="search" size={18} color={colors.outline} /><TextInput value={jobTitle} onChangeText={setJobTitle} placeholder="Ex. Développeur Fullstack" className="ml-2 flex-1 font-sans text-body-md text-on-surface" /></View></View>

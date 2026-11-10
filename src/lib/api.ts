@@ -1,5 +1,8 @@
 // On a physical device, `localhost` refers to the device itself. Configure the
 // development API endpoint with EXPO_PUBLIC_API_BASE_URL in `.env.local`.
+import type { DocumentPickerAsset } from 'expo-document-picker';
+import { File as ExpoFile } from 'expo-file-system';
+
 export const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL ?? 'http://localhost:8000';
 
 interface ApiErrorResponse {
@@ -38,13 +41,38 @@ async function request<T>(path: string, method: string, body?: unknown): Promise
   return data as T;
 }
 
+async function multipartRequest<T>(path: string, body: FormData): Promise<T> {
+  const headers: Record<string, string> = {};
+  if (authToken) {
+    headers.Authorization = `Bearer ${authToken}`;
+  }
+
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    method: 'POST',
+    headers,
+    body,
+  });
+  const data = (await response.json()) as T | ApiErrorResponse;
+
+  if (!response.ok) {
+    const errorMessage = (data as ApiErrorResponse).detail || (data as ApiErrorResponse).message || 'Erreur réseau';
+    throw new Error(errorMessage);
+  }
+
+  return data as T;
+}
+
 export type AccountType = 'candidate' | 'recruiter';
-export type LoginAccountType = AccountType | 'admin';
 
 export interface LoginPayload {
   email: string;
   password: string;
-  account_type: LoginAccountType;
+}
+
+export interface GoogleLoginPayload {
+  id_token: string;
+  account_type?: AccountType;
+  create_account?: boolean;
 }
 
 export interface RegisterPayload {
@@ -251,8 +279,20 @@ export async function reviewBillingPayment(paymentId: number, status: 'Payé' | 
 export async function changePassword(current_password: string, new_password: string): Promise<{ updated: boolean }> {
   return request<{ updated: boolean }>('/auth/password/change', 'POST', { current_password, new_password });
 }
+
+export async function requestPasswordReset(email: string): Promise<{ message: string }> {
+  return request<{ message: string }>('/auth/password/forgot', 'POST', { email });
+}
+
+export async function resetPassword(email: string, code: string, new_password: string): Promise<{ updated: boolean }> {
+  return request<{ updated: boolean }>('/auth/password/reset', 'POST', { email, code, new_password });
+}
 export async function login(payload: LoginPayload): Promise<TokenResponse> {
   return request<TokenResponse>('/auth/login', 'POST', payload);
+}
+
+export async function loginWithGoogle(payload: GoogleLoginPayload): Promise<TokenResponse> {
+  return request<TokenResponse>('/auth/google', 'POST', payload);
 }
 
 export async function register(payload: RegisterPayload): Promise<TokenResponse> {
@@ -261,6 +301,32 @@ export async function register(payload: RegisterPayload): Promise<TokenResponse>
 
 export async function getMyProfile(userId: number): Promise<ProfileInfo> {
   return request<ProfileInfo>(`/profile/me/${userId}`, 'GET');
+}
+
+export interface NetworkPerson {
+  id: number;
+  user_id: number;
+  full_name: string;
+  job_title?: string;
+  city?: string;
+}
+
+export interface CandidateNetwork {
+  connections: NetworkPerson[];
+  suggestions: NetworkPerson[];
+  total_connections: number;
+}
+
+export async function getMyNetwork(): Promise<CandidateNetwork> {
+  return request<CandidateNetwork>('/network/me', 'GET');
+}
+
+export async function connectCandidate(candidateId: number): Promise<{ connected: boolean }> {
+  return request<{ connected: boolean }>(`/network/${candidateId}`, 'POST');
+}
+
+export async function disconnectCandidate(candidateId: number): Promise<{ connected: boolean }> {
+  return request<{ connected: boolean }>(`/network/${candidateId}`, 'DELETE');
 }
 
 export async function getJobs(params?: {
@@ -310,8 +376,16 @@ export async function applyToJob(payload: {
   candidate_id: number;
   job_offer_id: number;
   motivation_message?: string;
+  cv_file: DocumentPickerAsset;
+  motivation_letter_file: DocumentPickerAsset;
 }): Promise<ApplicationDetail> {
-  return request<ApplicationDetail>('/applications', 'POST', payload);
+  const body = new FormData();
+  body.append('candidate_id', String(payload.candidate_id));
+  body.append('job_offer_id', String(payload.job_offer_id));
+  if (payload.motivation_message) body.append('motivation_message', payload.motivation_message);
+  body.append('cv_file', new ExpoFile(payload.cv_file.uri), payload.cv_file.name);
+  body.append('motivation_letter_file', new ExpoFile(payload.motivation_letter_file.uri), payload.motivation_letter_file.name);
+  return multipartRequest<ApplicationDetail>('/applications', body);
 }
 
 export interface JobApplicationCandidate {
@@ -322,10 +396,37 @@ export interface JobApplicationCandidate {
   status: string;
   match_score?: number;
   job_offer_id: number;
+  motivation_message?: string;
+  cv_file_name?: string;
+  motivation_letter_file_name?: string;
 }
 
 export async function listJobApplications(jobOfferId: number): Promise<JobApplicationCandidate[]> {
   return request<JobApplicationCandidate[]>(`/applications/job/${jobOfferId}`, 'GET');
+}
+
+export interface ApplicationReview {
+  application_id: number;
+  status: string;
+  motivation_message?: string;
+  cv_file_name?: string;
+  motivation_letter_file_name?: string;
+}
+
+export async function getApplicationReview(applicationId: number): Promise<ApplicationReview> {
+  return request<ApplicationReview>(`/applications/${applicationId}/review`, 'GET');
+}
+
+export async function getApplicationDocument(applicationId: number, documentType: 'cv' | 'motivation_letter'): Promise<Blob> {
+  const headers: Record<string, string> = {};
+  if (authToken) headers.Authorization = `Bearer ${authToken}`;
+
+  const response = await fetch(`${API_BASE_URL}/applications/${applicationId}/documents/${documentType}`, { headers });
+  if (!response.ok) {
+    const data = (await response.json()) as ApiErrorResponse;
+    throw new Error(data.detail || data.message || 'Impossible de télécharger le document.');
+  }
+  return response.blob();
 }
 
 export async function updateApplicationStatus(applicationId: number, status: string): Promise<void> {
@@ -690,6 +791,37 @@ export interface AdminDashboardSummary {
 
 export async function getAdminDashboardSummary(): Promise<AdminDashboardSummary> {
   return request<AdminDashboardSummary>('/admin/dashboard/summary', 'GET');
+}
+
+export interface AdminUserItem {
+  id: number;
+  full_name: string;
+  email: string;
+  account_type: AccountType | 'admin';
+  created_at: string;
+}
+
+export async function listAdminUsers(params: { search?: string; account_type?: string } = {}): Promise<AdminUserItem[]> {
+  const query = new URLSearchParams();
+  if (params.search) query.set('search', params.search);
+  if (params.account_type) query.set('account_type', params.account_type);
+  return request<AdminUserItem[]>('/admin/users' + (query.toString() ? `?${query}` : ''), 'GET');
+}
+
+export async function createAdminUser(payload: { full_name: string; email: string; password: string; account_type: AccountType }): Promise<AdminUserItem> {
+  return request<AdminUserItem>('/admin/users', 'POST', payload);
+}
+
+export async function updateAdminUser(userId: number, payload: { full_name?: string; account_type?: AccountType }): Promise<AdminUserItem> {
+  return request<AdminUserItem>(`/admin/users/${userId}`, 'PATCH', payload);
+}
+
+export async function deleteAdminUser(userId: number): Promise<{ deleted: boolean }> {
+  return request<{ deleted: boolean }>(`/admin/users/${userId}`, 'DELETE');
+}
+
+export async function listOpenAdminJobs(): Promise<JobOffer[]> {
+  return request<JobOffer[]>('/admin/jobs/open', 'GET');
 }
 export interface CareerExperience {
   id: number;

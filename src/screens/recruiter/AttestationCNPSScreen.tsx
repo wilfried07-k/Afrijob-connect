@@ -34,7 +34,7 @@ export default function AttestationCNPSScreen({ navigation }: Props) {
 
   return (
     <View className="flex-1 bg-background">
-      <View className="h-16 flex-row items-center gap-3 px-container-margin"><Pressable onPress={() => navigation.goBack()} hitSlop={8}><MaterialIcons name="arrow-back" size={24} color={colors.primary} /></Pressable><Text className="font-sans-bold text-headline-md text-primary">Données CNPS</Text></View>
+      <View className="h-16 flex-row items-center gap-3 px-container-margin"><Pressable onPress={() => navigation.goBack()} hitSlop={8}><MaterialIcons style={{ transform: [{ translateY: 4 }] }} name="arrow-back" size={24} color={colors.primary} /></Pressable><Text className="font-sans-bold text-headline-md text-primary">Données CNPS</Text></View>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: 20, gap: 20, paddingBottom: 32 }}>
         <View className="flex-row items-start gap-2 rounded-xl border border-tertiary/20 bg-tertiary-fixed/20 p-md"><MaterialIcons name="info-outline" size={20} color={colors.tertiary} /><Text className="flex-1 font-sans text-body-md text-on-surface-variant">Aucune connexion à la CNPS n’est configurée. Cet écran ne peut pas vérifier une attestation ni confirmer le paiement des cotisations.</Text></View>
         {loading ? <ActivityIndicator color={colors.primary} /> : loadError ? <Text className="font-sans text-body-md text-error">{loadError}</Text> : <>

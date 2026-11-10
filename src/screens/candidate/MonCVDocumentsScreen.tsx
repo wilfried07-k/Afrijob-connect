@@ -1,12 +1,17 @@
+import { useState } from 'react';
 import { View, Text, Pressable, ScrollView, Alert } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
+import * as Print from 'expo-print';
+import * as Sharing from 'expo-sharing';
 import { colors } from '../../theme';
 import { useAuth } from '../../lib/auth';
+import { saveCandidateDocument } from '../../lib/candidateFiles';
 
 type Props = { navigation: { goBack: () => void; navigate: (screen: string, params?: any) => void } };
 
 export default function MonCVDocumentsScreen({ navigation }: Props) {
   const { authState } = useAuth();
+  const [generating, setGenerating] = useState(false);
   const profile = authState.profile;
 
   const cleanName = profile?.full_name ? profile.full_name.trim().replace(/\s+/g, '_') : 'Mon_CV';
@@ -48,11 +53,37 @@ export default function MonCVDocumentsScreen({ navigation }: Props) {
   const completedCount = sections.filter((s) => s.complete).length;
   const percent = Math.round((completedCount / sections.length) * 100);
 
+  const generateCV = async () => {
+    if (!profile) {
+      Alert.alert('Profil requis', 'Complétez votre profil avant de générer le CV.');
+      return;
+    }
+    const escapeHtml = (value: string) => value.replace(/[&<>"']/g, (character) => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+    })[character]!);
+    const html = `<!doctype html><html><head><meta charset="utf-8"><style>body{font-family:Arial,sans-serif;color:#20242c;padding:36px;line-height:1.5}h1{color:#004ac6;margin-bottom:4px}h2{border-bottom:1px solid #c3c6d7;color:#004ac6;padding-bottom:5px;margin-top:24px}.muted{color:#596273}.skills{background:#edf1fb;padding:10px;border-radius:6px}</style></head><body><h1>${escapeHtml(profile.full_name || 'Candidat')}</h1><div class="muted">${escapeHtml(profile.job_title || '')}</div><p>${escapeHtml(profile.email)}${profile.phone ? ` · ${escapeHtml(profile.phone)}` : ''}${profile.city ? ` · ${escapeHtml(profile.city)}` : ''}</p><h2>Profil professionnel</h2><p>${escapeHtml(profile.summary || 'Résumé professionnel à compléter.')}</p><h2>Compétences</h2><p class="skills">${escapeHtml(profile.skills || 'Compétences à compléter')}</p><h2>Expérience</h2><p>${profile.years_experience ?? 0} an(s) d’expérience</p></body></html>`;
+
+    setGenerating(true);
+    try {
+      const { uri } = await Print.printToFileAsync({ html });
+      const saved = await saveCandidateDocument(uri, cvFileName);
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(saved.uri, { mimeType: 'application/pdf', dialogTitle: 'Partager mon CV' });
+      } else {
+        Alert.alert('CV enregistré', 'Le PDF est disponible dans Mon CV & Documents.');
+      }
+    } catch (error) {
+      Alert.alert('Génération impossible', (error as Error).message || 'Le CV n’a pas pu être créé.');
+    } finally {
+      setGenerating(false);
+    }
+  };
+
   return (
     <View className="flex-1 bg-background">
       <View className="h-16 flex-row items-center gap-3 px-container-margin">
         <Pressable onPress={() => navigation.goBack()} hitSlop={8}>
-          <MaterialIcons name="arrow-back" size={24} color={colors.primary} />
+          <MaterialIcons style={{ transform: [{ translateY: 4 }] }} name="arrow-back" size={24} color={colors.primary} />
         </Pressable>
         <Text className="font-sans-bold text-headline-md text-primary">Mon CV</Text>
       </View>
@@ -69,11 +100,12 @@ export default function MonCVDocumentsScreen({ navigation }: Props) {
           </Text>
           <View className="flex-row gap-2">
             <Pressable
-              onPress={() => Alert.alert('Téléchargement', `Le fichier ${cvFileName} a été généré.`)}
+              onPress={() => void generateCV()}
+              disabled={generating}
               className="flex-row items-center gap-1 rounded-lg bg-primary-container px-md py-2"
             >
-              <MaterialIcons name="download" size={16} color={colors.onPrimaryContainer} />
-              <Text className="font-sans-semibold text-label-md text-on-primary-container">Télécharger</Text>
+              <MaterialIcons name={generating ? 'hourglass-empty' : 'download'} size={16} color={colors.onPrimaryContainer} />
+              <Text className="font-sans-semibold text-label-md text-on-primary-container">{generating ? 'Génération…' : 'Générer et partager'}</Text>
             </Pressable>
             <Pressable
               onPress={() => navigation.navigate('CreationProfilCandidat')}

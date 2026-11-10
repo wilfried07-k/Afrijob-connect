@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Alert, View, Text, Pressable, ScrollView, TextInput } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
+import * as DocumentPicker from 'expo-document-picker';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { CandidateStackParamList } from '../../navigation/types';
 import Screen from '../../components/ui/Screen';
@@ -9,6 +10,13 @@ import { useAuth } from '../../lib/auth';
 import { applyToJob } from '../../lib/api';
 
 type Props = NativeStackScreenProps<CandidateStackParamList, 'CandidatureRapide'>;
+type ApplicationDocument = DocumentPicker.DocumentPickerAsset;
+type DocumentKind = 'cv' | 'motivation_letter';
+const MAX_FILE_SIZE = 10 * 1024 * 1024;
+const ACCEPTED_FILE_TYPES = [
+  'application/pdf',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+];
 
 export default function CandidatureRapideScreen({ navigation, route }: Props) {
   const title = route.params?.title ?? 'Offre sélectionnée';
@@ -18,14 +26,43 @@ export default function CandidatureRapideScreen({ navigation, route }: Props) {
   const candidateId = authState.profile?.candidate_profile_id;
   const displayInitial = authState.profile?.full_name?.trim()?.[0]?.toUpperCase() ?? '?';
   const [message, setMessage] = useState('');
+  const [cvFile, setCvFile] = useState<ApplicationDocument | null>(null);
+  const [motivationLetterFile, setMotivationLetterFile] = useState<ApplicationDocument | null>(null);
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
+  const selectDocument = async (kind: DocumentKind) => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ACCEPTED_FILE_TYPES,
+        copyToCacheDirectory: true,
+      });
+      if (result.canceled) return;
+
+      const selectedFile = result.assets[0];
+      if (selectedFile.size !== undefined && selectedFile.size > MAX_FILE_SIZE) {
+        Alert.alert('Fichier trop volumineux', 'Chaque document doit faire 10 Mo maximum.');
+        return;
+      }
+
+      if (kind === 'cv') setCvFile(selectedFile);
+      else setMotivationLetterFile(selectedFile);
+    } catch (error) {
+      Alert.alert('Import impossible', (error as Error).message || 'Le document n’a pas pu être sélectionné.');
+    }
+  };
+
   const handleSubmit = async () => {
-    if (!acceptedTerms || !candidateId || !jobId) return;
+    if (!acceptedTerms || !candidateId || !jobId || !cvFile || !motivationLetterFile) return;
     setSubmitting(true);
     try {
-      await applyToJob({ candidate_id: candidateId, job_offer_id: jobId, motivation_message: message || undefined });
+      await applyToJob({
+        candidate_id: candidateId,
+        job_offer_id: jobId,
+        motivation_message: message || undefined,
+        cv_file: cvFile,
+        motivation_letter_file: motivationLetterFile,
+      });
       navigation.replace('CandidatureEnvoyee', { company });
     } catch (err) {
       Alert.alert('Candidature non envoyée', (err as Error).message || 'Réessaie plus tard.');
@@ -38,7 +75,7 @@ export default function CandidatureRapideScreen({ navigation, route }: Props) {
     <Screen>
       <View className="h-16 flex-row items-center justify-between px-container-margin">
         <Pressable onPress={() => navigation.goBack()} hitSlop={8}>
-          <MaterialIcons name="arrow-back" size={24} color={colors.primary} />
+          <MaterialIcons style={{ transform: [{ translateY: 4 }] }} name="arrow-back" size={24} color={colors.primary} />
         </Pressable>
         <Text className="font-sans-semibold text-title-lg text-primary">Postuler · {title}</Text>
         <View className="w-6" />
@@ -76,10 +113,28 @@ export default function CandidatureRapideScreen({ navigation, route }: Props) {
             <MaterialIcons name="person-outline" size={22} color={colors.primary} />
             <View className="flex-1 gap-1">
               <Text className="font-sans-semibold text-title-lg text-on-surface">Profil transmis avec la candidature</Text>
-              <Text className="font-sans text-body-md text-on-surface-variant">La gestion et la pièce jointe de CV ne sont pas encore disponibles. Vérifie tes coordonnées avant l’envoi.</Text>
+              <Text className="font-sans text-body-md text-on-surface-variant">Joins ton CV et ta lettre de motivation en PDF ou DOCX (10 Mo maximum chacun). Le recruteur pourra les consulter avec ta candidature.</Text>
             </View>
           </View>
           <Pressable onPress={() => navigation.navigate('CreationProfilCandidat')} className="self-start py-2"><Text className="font-sans-semibold text-label-lg text-primary">Vérifier mon profil</Text></Pressable>
+        </View>
+        <View className="gap-md">
+          <Text className="px-1 font-sans-semibold text-headline-md text-on-surface">Documents obligatoires</Text>
+          {([
+            { kind: 'cv' as const, title: 'CV', file: cvFile },
+            { kind: 'motivation_letter' as const, title: 'Lettre de motivation', file: motivationLetterFile },
+          ]).map(({ kind, title: documentTitle, file }) => (
+            <View key={kind} className="flex-row items-center gap-md rounded-lg border border-outline-variant bg-surface-container-lowest p-md">
+              <MaterialIcons name={file ? 'description' : 'upload-file'} size={22} color={colors.primary} />
+              <View className="flex-1">
+                <Text className="font-sans-semibold text-label-lg text-on-surface">{documentTitle}</Text>
+                <Text numberOfLines={1} className="font-sans text-label-md text-on-surface-variant">{file?.name ?? 'Aucun fichier sélectionné'}</Text>
+              </View>
+              <Pressable onPress={() => void selectDocument(kind)} className="rounded-full bg-primary-container/20 px-md py-2">
+                <Text className="font-sans-semibold text-label-md text-primary">{file ? 'Remplacer' : 'Ajouter'}</Text>
+              </Pressable>
+            </View>
+          ))}
         </View>
         {/* Message */}
         <View className="gap-md">
@@ -115,10 +170,10 @@ export default function CandidatureRapideScreen({ navigation, route }: Props) {
           </Text>
         </Pressable>
         <Pressable
-          disabled={!acceptedTerms || submitting || !jobId || !candidateId}
+          disabled={!acceptedTerms || submitting || !jobId || !candidateId || !cvFile || !motivationLetterFile}
           onPress={handleSubmit}
           className={`h-14 flex-row items-center justify-center gap-2 rounded-full bg-primary shadow-lg ${
-            !acceptedTerms || submitting || !jobId || !candidateId ? 'opacity-50' : ''
+            !acceptedTerms || submitting || !jobId || !candidateId || !cvFile || !motivationLetterFile ? 'opacity-50' : ''
           }`}
         >
           <Text className="font-sans-semibold text-title-lg text-on-primary">Envoyer ma candidature</Text>

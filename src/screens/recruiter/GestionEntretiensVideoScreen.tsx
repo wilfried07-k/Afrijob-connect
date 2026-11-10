@@ -53,7 +53,7 @@ export default function GestionEntretiensVideoScreen({ navigation }: Props) {
   return (
     <Screen>
       <View className="h-14 flex-row items-center justify-between px-container-margin">
-        <Pressable onPress={() => navigation.goBack()} hitSlop={8}><MaterialIcons name="arrow-back" size={24} color={colors.primary} /></Pressable>
+        <Pressable onPress={() => navigation.goBack()} hitSlop={8}><MaterialIcons style={{ transform: [{ translateY: 4 }] }} name="arrow-back" size={24} color={colors.primary} /></Pressable>
         <Text className="font-sans-bold text-headline-md text-primary">Entretiens</Text><View className="w-6" />
       </View>
       <FlatList

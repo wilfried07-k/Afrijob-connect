@@ -5,7 +5,7 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": true
     },
@@ -24,7 +24,19 @@
     },
     "plugins": [
       "expo-splash-screen",
-      "expo-status-bar"
+      "expo-status-bar",
+      "expo-secure-store",
+      "expo-web-browser",
+      "@react-native-google-signin/google-signin",
+      "expo-sharing",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Autorisez l’accès aux photos pour joindre des documents de conformité.",
+          "cameraPermission": "Autorisez l’accès à la caméra pour photographier les documents de conformité et réaliser un selfie.",
+          "microphonePermission": false
+        }
+      ]
     ],
     "extra": {
       "eas": {

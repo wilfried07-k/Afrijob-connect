@@ -57,7 +57,7 @@ export default function PortfolioProjetsScreen({ navigation }: Props) {
   return (
     <View className="flex-1 bg-background">
       <View className="h-16 flex-row items-center justify-between px-container-margin">
-        <View className="flex-row items-center gap-3"><Pressable onPress={() => navigation.goBack()} hitSlop={8}><MaterialIcons name="arrow-back" size={24} color={colors.primary} /></Pressable><Text className="font-sans-bold text-headline-md text-primary">Mon portfolio</Text></View>
+        <View className="flex-row items-center gap-3"><Pressable onPress={() => navigation.goBack()} hitSlop={8}><MaterialIcons style={{ transform: [{ translateY: 4 }] }} name="arrow-back" size={24} color={colors.primary} /></Pressable><Text className="font-sans-bold text-headline-md text-primary">Mon portfolio</Text></View>
         <Pressable onPress={() => setShowForm((value) => !value)} className="h-10 w-10 items-center justify-center rounded-full bg-primary"><MaterialIcons name={showForm ? 'close' : 'add'} size={20} color="#fff" /></Pressable>
       </View>
       <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 20, gap: 16, paddingBottom: 32 }}>

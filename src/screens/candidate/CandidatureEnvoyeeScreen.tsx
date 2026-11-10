@@ -14,7 +14,7 @@ export default function CandidatureEnvoyeeScreen({ navigation, route }: Props) {
     <Screen>
       <View className="h-16 flex-row items-center px-container-margin">
         <Pressable onPress={() => navigation.navigate('CandidateTabs')} hitSlop={8}>
-          <MaterialIcons name="arrow-back" size={24} color={colors.primary} />
+          <MaterialIcons style={{ transform: [{ translateY: 4 }] }} name="arrow-back" size={24} color={colors.primary} />
         </Pressable>
         <Text className="ml-md font-sans-semibold text-title-lg text-on-surface">Confirmation</Text>
       </View>
