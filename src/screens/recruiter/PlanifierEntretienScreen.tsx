@@ -43,7 +43,7 @@ export default function PlanifierEntretienScreen({ navigation, route }: Props) {
         mode: mode === 'virtual' ? 'video' : 'onsite',
         location_or_link: location.trim() || undefined,
       });
-      Alert.alert('Entretien planifié', 'La candidature a été mise à jour et l’entretien est enregistré.', [{ text: 'OK', onPress: () => navigation.navigate('GestionEntretiensVideo') }]);
+      navigation.navigate('GestionEntretiensVideo');
     } catch (error) {
       Alert.alert('Erreur', (error as Error).message || 'Impossible de planifier cet entretien.');
     } finally {

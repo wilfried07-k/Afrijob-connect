@@ -15,7 +15,9 @@ export default function DetailsCandidatScreen({ navigation, route }: Props) {
   const [candidate, setCandidate] = useState<CandidateProfilePublic | null>(null);
   const [applicationReview, setApplicationReview] = useState<ApplicationReview | null>(null);
   const [loading, setLoading] = useState(true);
+  const [reviewLoading, setReviewLoading] = useState(false);
   const [loadError, setLoadError] = useState('');
+  const [reviewError, setReviewError] = useState('');
   const [openingDocument, setOpeningDocument] = useState<'cv' | 'motivation_letter' | null>(null);
   const applicationId = route.params?.applicationId;
 
@@ -23,16 +25,28 @@ export default function DetailsCandidatScreen({ navigation, route }: Props) {
     let active = true;
     const load = async () => {
       const candidateId = route.params?.candidateId;
+      setLoading(true);
+      setLoadError('');
+      setReviewError('');
+      setApplicationReview(null);
       if (!candidateId) { setLoadError('Le profil du candidat est introuvable.'); setLoading(false); return; }
       try {
-        const [profile, review] = await Promise.all([
-          getCandidateProfile(candidateId),
-          applicationId ? getApplicationReview(applicationId) : Promise.resolve(null),
-        ]);
+        const profile = await getCandidateProfile(candidateId);
         if (active) setCandidate(profile);
-        if (active) setApplicationReview(review);
       } catch (error) { if (active) setLoadError((error as Error).message || 'Impossible de charger le profil.'); }
       finally { if (active) setLoading(false); }
+
+      if (applicationId && active) {
+        setReviewLoading(true);
+        try {
+          const review = await getApplicationReview(applicationId);
+          if (active) setApplicationReview(review);
+        } catch (error) {
+          if (active) setReviewError((error as Error).message || 'Le dossier de candidature est indisponible.');
+        } finally {
+          if (active) setReviewLoading(false);
+        }
+      }
     };
     void load();
     return () => { active = false; };
@@ -86,8 +100,16 @@ export default function DetailsCandidatScreen({ navigation, route }: Props) {
             <Pressable onPress={schedule} className="h-11 flex-row items-center justify-center gap-2 rounded-full bg-primary"><MaterialIcons name="event" size={16} color="#ffffff" /><Text className="font-sans-semibold text-label-lg text-on-primary">Planifier un entretien</Text></Pressable>
           </View>
           <View className="gap-md rounded-xl border border-outline-variant bg-surface-container-lowest p-lg"><View className="flex-row items-center gap-2"><MaterialIcons name="person" size={20} color={colors.primary} /><Text className="font-sans-semibold text-headline-md text-on-surface">Résumé professionnel</Text></View><Text className="font-sans text-body-lg leading-relaxed text-on-surface-variant">{candidate.summary || 'Aucun résumé professionnel renseigné.'}</Text></View>
-          {applicationReview && <View className="gap-md rounded-xl border border-outline-variant/30 bg-surface-container-lowest p-lg">
+          {(applicationReview || reviewLoading || reviewError) && <View className="gap-md rounded-xl border border-outline-variant/30 bg-surface-container-lowest p-lg">
             <View className="flex-row items-center gap-2"><MaterialIcons name="assignment" size={20} color={colors.primary} /><Text className="font-sans-semibold text-headline-md text-on-surface">Dossier de candidature</Text></View>
+            {reviewLoading ? <ActivityIndicator color={colors.primary} /> : null}
+            {reviewError ? <Text className="font-sans text-body-md text-error">{reviewError}</Text> : null}
+            {applicationReview?.candidate_email || applicationReview?.candidate_phone ? <View className="gap-1">
+              <Text className="font-sans-semibold text-label-lg text-on-surface">Coordonnées du candidat</Text>
+              {applicationReview.candidate_email ? <Text selectable className="font-sans text-body-md text-on-surface-variant">{applicationReview.candidate_email}</Text> : null}
+              {applicationReview.candidate_phone ? <Text selectable className="font-sans text-body-md text-on-surface-variant">{applicationReview.candidate_phone}</Text> : null}
+            </View> : null}
+            {applicationReview && <>
             <View className="gap-1">
               <Text className="font-sans-semibold text-label-lg text-on-surface">Message de motivation</Text>
               <Text className="font-sans text-body-md leading-relaxed text-on-surface-variant">{applicationReview.motivation_message || 'Aucun message complémentaire.'}</Text>
@@ -106,6 +128,7 @@ export default function DetailsCandidatScreen({ navigation, route }: Props) {
                 <View className="flex-1"><Text className="font-sans-semibold text-label-lg text-primary">{label}</Text><Text numberOfLines={1} className="font-sans text-label-md text-on-surface-variant">{fileName ?? 'Document non fourni'}</Text></View>
               </Pressable>
             ))}
+            </>}
           </View>}
           <View className="gap-md rounded-xl border border-outline-variant bg-surface-container-lowest p-lg"><View className="flex-row items-center gap-2"><MaterialIcons name="psychology" size={20} color={colors.primary} /><Text className="font-sans-semibold text-headline-md text-on-surface">Compétences</Text></View>{candidate.skills.length ? <View className="flex-row flex-wrap gap-2">{candidate.skills.map((skill) => <View key={skill} className="rounded-lg bg-surface-container-high px-md py-2"><Text className="font-sans-medium text-label-md text-on-surface-variant">{skill}</Text></View>)}</View> : <Text className="font-sans text-body-md text-on-surface-variant">Aucune compétence renseignée.</Text>}</View>
         </ScrollView>

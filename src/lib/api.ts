@@ -16,6 +16,31 @@ export function setAuthToken(token: string | null) {
   authToken = token;
 }
 
+async function fetchWithTimeout(url: string, init: RequestInit): Promise<Response> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 45000);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new Error('La requête a expiré. Vérifiez votre connexion puis réessayez.');
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function readApiResponse(response: Response): Promise<unknown> {
+  const text = await response.text();
+  if (!text) return null;
+  try {
+    return JSON.parse(text);
+  } catch {
+    return { detail: text };
+  }
+}
+
 async function request<T>(path: string, method: string, body?: unknown): Promise<T> {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -25,16 +50,16 @@ async function request<T>(path: string, method: string, body?: unknown): Promise
     headers.Authorization = `Bearer ${authToken}`;
   }
 
-  const response = await fetch(`${API_BASE_URL}${path}`, {
+  const response = await fetchWithTimeout(`${API_BASE_URL}${path}`, {
     method,
     headers,
     body: body ? JSON.stringify(body) : undefined,
   });
 
-  const data = (await response.json()) as T | ApiErrorResponse;
+  const data = (await readApiResponse(response)) as T | ApiErrorResponse | null;
 
   if (!response.ok) {
-    const errorMessage = (data as ApiErrorResponse).detail || (data as ApiErrorResponse).message || 'Erreur rÃ©seau';
+    const errorMessage = (data as ApiErrorResponse | null)?.detail || (data as ApiErrorResponse | null)?.message || `Erreur serveur (${response.status})`;
     throw new Error(errorMessage);
   }
 
@@ -47,15 +72,15 @@ async function multipartRequest<T>(path: string, body: FormData): Promise<T> {
     headers.Authorization = `Bearer ${authToken}`;
   }
 
-  const response = await fetch(`${API_BASE_URL}${path}`, {
+  const response = await fetchWithTimeout(`${API_BASE_URL}${path}`, {
     method: 'POST',
     headers,
     body,
   });
-  const data = (await response.json()) as T | ApiErrorResponse;
+  const data = (await readApiResponse(response)) as T | ApiErrorResponse | null;
 
   if (!response.ok) {
-    const errorMessage = (data as ApiErrorResponse).detail || (data as ApiErrorResponse).message || 'Erreur réseau';
+    const errorMessage = (data as ApiErrorResponse | null)?.detail || (data as ApiErrorResponse | null)?.message || `Erreur serveur (${response.status})`;
     throw new Error(errorMessage);
   }
 
@@ -411,6 +436,8 @@ export interface ApplicationReview {
   motivation_message?: string;
   cv_file_name?: string;
   motivation_letter_file_name?: string;
+  candidate_email?: string | null;
+  candidate_phone?: string | null;
 }
 
 export async function getApplicationReview(applicationId: number): Promise<ApplicationReview> {
@@ -421,10 +448,10 @@ export async function getApplicationDocument(applicationId: number, documentType
   const headers: Record<string, string> = {};
   if (authToken) headers.Authorization = `Bearer ${authToken}`;
 
-  const response = await fetch(`${API_BASE_URL}/applications/${applicationId}/documents/${documentType}`, { headers });
+  const response = await fetchWithTimeout(`${API_BASE_URL}/applications/${applicationId}/documents/${documentType}`, { headers });
   if (!response.ok) {
-    const data = (await response.json()) as ApiErrorResponse;
-    throw new Error(data.detail || data.message || 'Impossible de télécharger le document.');
+    const data = (await readApiResponse(response)) as ApiErrorResponse | null;
+    throw new Error(data?.detail || data?.message || `Impossible de télécharger le document (${response.status}).`);
   }
   return response.blob();
 }
@@ -572,7 +599,7 @@ export interface CompanyInfo {
 export interface CandidateProfilePublic {
   id: number;
   full_name?: string;
-  email?: string;
+  email?: string | null;
   job_title?: string;
   city?: string;
   summary?: string;
@@ -585,6 +612,7 @@ export interface CandidateProfilePublic {
 export interface InterviewSummary {
   interview_id: number;
   application_id: number;
+  candidate_id?: number;
   job_title?: string;
   company_name?: string;
   candidate_name?: string;

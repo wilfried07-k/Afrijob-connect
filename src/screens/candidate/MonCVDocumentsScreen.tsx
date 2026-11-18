@@ -84,7 +84,7 @@ export default function MonCVDocumentsScreen({ navigation }: Props) {
       <View className="h-16 flex-row items-center gap-3 px-container-margin">
         <Pressable onPress={() => navigation.goBack()} hitSlop={8}>
           <MaterialIcons style={{ transform: [{ translateY: 4 }] }} name="arrow-back" size={24} color={colors.primary} />
-        </Pressable>
+        </Pressable> 
         <Text className="font-sans-bold text-headline-md text-primary">Mon CV</Text>
       </View>
 

@@ -39,7 +39,14 @@ export type CandidateStackParamList = {
   CreationProfilCandidat: undefined;
   ProfilPublicCandidat: { candidateId?: number } | undefined;
   CandidatureSpontanee: { company?: string } | undefined;
-  ConfirmationEntretien: { company?: string; position?: string } | undefined;
+  ConfirmationEntretien: {
+    company?: string;
+    position?: string;
+    scheduledAt?: string;
+    mode?: string;
+    locationOrLink?: string;
+    interviewId?: number;
+  } | undefined;
   CalendrierCandidat: undefined;
   CoffreFortDocuments: undefined;
   PreparationEntretienVideo: { company?: string; position?: string } | undefined;

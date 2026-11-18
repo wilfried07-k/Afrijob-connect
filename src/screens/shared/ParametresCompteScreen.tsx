@@ -76,7 +76,9 @@ export default function ParametresCompteScreen({ navigation }: Props) {
       await changePassword(currentPassword, newPassword);
       setPasswordModal(false);
       setCurrentPassword(''); setNewPassword('');
-      Alert.alert('Mot de passe modifié', 'Ton nouveau mot de passe est actif.');
+      signOut();
+      navigation.getParent?.()?.getParent?.()?.reset({ index: 0, routes: [{ name: 'Auth' }] });
+      Alert.alert('Mot de passe modifié', 'Reconnecte-toi avec ton nouveau mot de passe. Les anciennes sessions ont été fermées.');
     } catch (error) { Alert.alert('Erreur', (error as Error).message || 'Impossible de modifier le mot de passe.'); }
     finally { setSavingPassword(false); }
   };

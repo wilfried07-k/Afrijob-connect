@@ -1,4 +1,4 @@
-import { View, Text, Pressable, ScrollView } from 'react-native';
+import { Alert, Linking, View, Text, Pressable, ScrollView } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { CandidateStackParamList } from '../../navigation/types';
@@ -7,13 +7,6 @@ import { colors } from '../../theme';
 
 type Props = NativeStackScreenProps<CandidateStackParamList, 'ConfirmationEntretien'>;
 
-const DETAILS: { icon: keyof typeof MaterialIcons.glyphMap; label: string; value: string }[] = [
-  { icon: 'work', label: 'Poste', value: 'Product Designer' },
-  { icon: 'calendar-today', label: 'Date', value: 'Lundi 14 Octobre' },
-  { icon: 'schedule', label: 'Heure', value: '10:30 — 11:30' },
-  { icon: 'videocam', label: 'Format', value: 'Visioconférence' },
-];
-
 const TIPS = [
   { icon: 'description' as const, title: 'Révisez la description du poste', body: 'Assurez-vous de bien comprendre les attentes du rôle.' },
   { icon: 'person' as const, title: 'Recherchez vos interlocuteurs', body: "Consultez le profil de l'équipe qui vous recevra." },
@@ -21,7 +14,40 @@ const TIPS = [
 ];
 
 export default function ConfirmationEntretienScreen({ navigation, route }: Props) {
-  const company = route.params?.company ?? 'MTN Cameroon';
+  const company = route.params?.company ?? 'Entreprise';
+  const position = route.params?.position ?? 'Poste';
+  const scheduledAt = route.params?.scheduledAt ? new Date(route.params.scheduledAt) : null;
+  const mode = route.params?.mode ?? 'video';
+  const locationOrLink = route.params?.locationOrLink;
+
+  const formattedDate = scheduledAt
+    ? scheduledAt.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })
+    : '—';
+  const formattedTime = scheduledAt
+    ? scheduledAt.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
+    : '—';
+
+  const isVideoLink = locationOrLink && /^https?:\/\//i.test(locationOrLink);
+
+  const openMeeting = async () => {
+    if (!locationOrLink) return;
+    if (isVideoLink) {
+      try {
+        await Linking.openURL(locationOrLink);
+      } catch {
+        Alert.alert('Lien indisponible', "Impossible d'ouvrir ce lien.");
+      }
+    } else {
+      Alert.alert('Adresse', locationOrLink);
+    }
+  };
+
+  const DETAILS: { icon: keyof typeof MaterialIcons.glyphMap; label: string; value: string }[] = [
+    { icon: 'work', label: 'Poste', value: position },
+    { icon: 'calendar-today', label: 'Date', value: formattedDate },
+    { icon: 'schedule', label: 'Heure', value: formattedTime },
+    { icon: mode === 'onsite' ? 'location-on' : 'videocam', label: 'Format', value: mode === 'onsite' ? 'Sur site' : 'Visioconférence' },
+  ];
 
   return (
     <Screen>
@@ -33,14 +59,14 @@ export default function ConfirmationEntretienScreen({ navigation, route }: Props
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: 20, gap: 24, paddingBottom: 32 }}>
-        {/* Success */}
+        {/* Success banner */}
         <View className="items-center gap-2 pt-md">
           <View className="mb-2 h-20 w-20 items-center justify-center rounded-full bg-secondary-container shadow-md">
             <MaterialIcons name="check-circle" size={40} color={colors.onSecondaryContainer} />
           </View>
           <Text className="font-sans-bold text-headline-lg-mobile text-primary">Félicitations !</Text>
-          <Text className="font-sans text-body-lg text-on-surface-variant">
-            Votre entretien est confirmé.
+          <Text className="font-sans text-body-lg text-on-surface-variant text-center">
+            Votre entretien est confirmé avec {company}.
           </Text>
         </View>
 
@@ -70,28 +96,46 @@ export default function ConfirmationEntretienScreen({ navigation, route }: Props
             ))}
           </View>
 
-          <Pressable className="mx-lg mb-lg flex-row items-center justify-between rounded-lg border border-outline-variant/30 bg-surface-container-low p-md">
-            <View className="flex-row items-center gap-3">
-              <View className="rounded-full bg-white p-2 shadow-sm">
-                <MaterialIcons name="video-call" size={20} color={colors.primary} />
+          {/* Link or address */}
+          {locationOrLink ? (
+            <Pressable onPress={() => void openMeeting()} className="mx-lg mb-lg flex-row items-center justify-between rounded-lg border border-outline-variant/30 bg-surface-container-low p-md">
+              <View className="flex-row items-center gap-3">
+                <View className="rounded-full bg-white p-2 shadow-sm">
+                  <MaterialIcons name={isVideoLink ? 'video-call' : 'location-on'} size={20} color={colors.primary} />
+                </View>
+                <View className="flex-1">
+                  <Text className="font-sans-semibold text-body-md text-on-surface">
+                    {isVideoLink ? 'Lien de visioconférence' : 'Adresse du rendez-vous'}
+                  </Text>
+                  <Text numberOfLines={1} className="font-sans text-label-md text-on-surface-variant">{locationOrLink}</Text>
+                </View>
               </View>
-              <View>
-                <Text className="font-sans-semibold text-body-md text-on-surface">Lien Google Meet inclus</Text>
-                <Text className="font-sans text-label-md text-on-surface-variant">meet.google.com/abc-defg-hij</Text>
-              </View>
+              <MaterialIcons name="open-in-new" size={20} color={colors.onSurfaceVariant} />
+            </Pressable>
+          ) : (
+            <View className="mx-lg mb-lg flex-row items-start gap-2 rounded-lg border border-outline-variant/30 bg-surface-container-low p-md">
+              <MaterialIcons name="info-outline" size={18} color={colors.onSurfaceVariant} />
+              <Text className="flex-1 font-sans text-label-md text-on-surface-variant">
+                Le recruteur n'a pas encore ajouté de lien de visioconférence ou d'adresse. Consultez votre agenda pour les mises à jour.
+              </Text>
             </View>
-            <MaterialIcons name="open-in-new" size={20} color={colors.onSurfaceVariant} />
-          </Pressable>
+          )}
         </View>
 
-        {/* CTAs */}
+        {/* CTA */}
         <View className="gap-2">
-          <Pressable className="h-12 flex-row items-center justify-center gap-2 rounded-xl bg-primary shadow-md">
+          <Pressable
+            onPress={() => navigation.navigate('CalendrierCandidat')}
+            className="h-12 flex-row items-center justify-center gap-2 rounded-xl bg-primary shadow-md"
+          >
             <MaterialIcons name="event" size={20} color="#ffffff" />
-            <Text className="font-sans-semibold text-label-lg text-on-primary">Ajouter au calendrier</Text>
+            <Text className="font-sans-semibold text-label-lg text-on-primary">Voir mon agenda</Text>
           </Pressable>
-          <Pressable className="h-12 items-center justify-center rounded-xl">
-            <Text className="font-sans-semibold text-label-lg text-primary">Modifier le créneau</Text>
+          <Pressable
+            onPress={() => navigation.navigate('SuiviCandidatures')}
+            className="h-12 items-center justify-center rounded-xl"
+          >
+            <Text className="font-sans-semibold text-label-lg text-primary">Retour à mes candidatures</Text>
           </Pressable>
         </View>
 
@@ -99,7 +143,7 @@ export default function ConfirmationEntretienScreen({ navigation, route }: Props
         <View className="flex-row items-start gap-3 rounded-lg border border-secondary/20 bg-secondary-container/10 px-md py-3">
           <MaterialIcons name="mail" size={20} color={colors.secondary} />
           <Text className="flex-1 font-sans text-body-md leading-tight text-on-surface-variant">
-            Le lien de réunion vous a également été envoyé par email. Vérifiez votre boîte de réception.
+            Les détails de votre entretien ont également été enregistrés dans votre agenda. Vérifiez régulièrement en cas de modification.
           </Text>
         </View>
 
